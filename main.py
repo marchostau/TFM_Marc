@@ -1,0 +1,9 @@
+import numpy as np
+import pandas as pd
+from metpy import calc
+from metpy.units import units
+
+from .data_processing.process_data import process_datasets
+
+config_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/config.yaml'
+process_datasets(config_path)

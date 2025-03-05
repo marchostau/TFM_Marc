@@ -1,0 +1,20 @@
+dir_source: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv"
+dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_10m_zstd_dbscan"
+#dir_source: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/example_csv"
+#dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/example_processed_csv"
+
+remove_duplicates: true
+normalize: true
+norm_mode: "z-standardization"
+norm_daily_based: false
+norm_cols: ["latitude", "longitude", "wind_speed", "wind_direction", "u_component", "v_component"]
+
+remove_outliers: true
+outlier_mode: "dbscan"
+outlier_daily_based: true
+outlier_cols: ["u_component", "v_component"]
+
+sliding_window: true
+window_size: "10m"
+
+daily_based: false
