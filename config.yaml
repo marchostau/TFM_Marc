@@ -1,5 +1,6 @@
 dir_source: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv"
-dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_10m_zstd_dbscan"
+dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+#dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_10m_zstd_dbscan"
 #dir_source: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/example_csv"
 #dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/example_processed_csv"
 
@@ -15,6 +16,6 @@ outlier_daily_based: true
 outlier_cols: ["u_component", "v_component"]
 
 sliding_window: true
-window_size: "10m"
+window_size: "5m"
 
 daily_based: false
