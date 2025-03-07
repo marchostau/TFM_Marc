@@ -22,6 +22,11 @@ def compute_epsilon(dataframe: pd.DataFrame, n_neighbours: int, cols: list):
     nbrs = NearestNeighbors(
         n_neighbors=n_neighbours
     ).fit(dataframe[cols])
+
+    logger.info(f"Dataframe in compute epsilon:\n{dataframe}")
+    logger.info(f"N_neighbours: {n_neighbours}")
+    logger.info(f"Cols: {cols}")
+
     neigh_dist, neigh_ind = nbrs.kneighbors(
         dataframe[cols]
     )
@@ -42,7 +47,19 @@ def remove_outliers_dbscan(
         eps: float = None, min_samples: int = None
 ):
     min_samples = 2*len(cols) if min_samples is None else min_samples
+    if len(dataframe) < min_samples:
+        logger.warning(
+            f"Can't apply remove outliers to this segment because "
+            f"it has {len(dataframe)} rows and min_samples is {min_samples}"
+        )
+        return None
     eps = compute_epsilon(dataframe, min_samples, cols) if eps is None else eps
+    if eps is None:
+        logger.warning(
+            f"Epsilon computed is None with eps={eps}, rows={len(dataframe)}" 
+            f", min_samples={min_samples} on columns: {cols}"
+        )
+        return None
 
     logger.info(
         f"Applying DBSCAN with eps={eps}, " 
@@ -186,6 +203,15 @@ def remove_outliers_dir_dataset(
             logger.info(f"Processed file saved: {output_filepath}")
 
 
+def remove_wrong_timestamps(dataframe: pd.DataFrame):
+    logger.info("Removing wrong timestamps")
+    original_len = len(dataframe)
+    mode_timestamp = dataframe['timestamp'].dt.day.mode()[0]
+    dataframe = dataframe[dataframe['timestamp'].dt.day == mode_timestamp]
+    logger.info(f"Removed {original_len - len(dataframe)} duplicated rows")
+    return dataframe
+
+
 def remove_repeated_timestamps(dataframe: pd.DataFrame):
     logger.info("Removing duplicate timestamps")
     original_len = len(dataframe)
@@ -224,6 +250,19 @@ def remove_repeated_timestamps_dir(dir_source: str, dir_output: str):
                 "The repeated timestamps have been removed "
                 f"and the file is saved in: {output_filepath}"
             )
+
+
+def split_continuous_segments(
+        dataframe: pd.DataFrame, gap_threshold: pd.Timedelta
+):
+    logger.info(
+        f"Splitting not continous timestamps with a gap {gap_threshold}"
+    )
+    time_diffs = dataframe["timestamp"].diff()
+    group_ids = (time_diffs > gap_threshold).cumsum()
+    segments = [group for _, group in dataframe.groupby(group_ids)] 
+    logger.info(f"Dataframe splitted in {len(segments)} segments")
+    return segments
 
 
 def average_sliding_window(dataframe: pd.DataFrame, window: pd.Timedelta):

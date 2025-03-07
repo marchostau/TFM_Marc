@@ -3,9 +3,11 @@ import os
 import pandas as pd
 
 from .data_cleaning import (
+    remove_wrong_timestamps,
     remove_repeated_timestamps,
     remove_outliers_dataset,
     compute_outlier_params,
+    split_continuous_segments,
     average_sliding_window,
 )
 from .normalization import normalize_dataset
@@ -62,27 +64,51 @@ def process_datasets(config_path: str):
             if p_config.remove_duplicates:
                 dataframe = remove_repeated_timestamps(dataframe)
 
-            if p_config.normalize:
-                dataframe = normalize_dataset(
-                    dataframe,
-                    p_config.norm_mode,
-                    p_config.norm_cols,
-                    mode_parameters=norm_mode_parameters
+            if p_config.remove_wrong_dates:
+                dataframe = remove_wrong_timestamps(dataframe)
+
+            if p_config.split_continuous_segments:
+                segments = split_continuous_segments(
+                    dataframe, pd.Timedelta(p_config.gap_threshold)
+                )
+            else:
+                segments = [dataframe]
+
+            for i, segment in enumerate(segments):
+                if p_config.normalize:
+                    segment = normalize_dataset(
+                        segment,
+                        p_config.norm_mode,
+                        p_config.norm_cols,
+                        mode_parameters=norm_mode_parameters
+                    )
+
+                if p_config.remove_outliers:
+                    segment = remove_outliers_dataset(
+                        segment,
+                        p_config.outlier_mode,
+                        p_config.outlier_cols,
+                        mode_parameters=outliers_mode_parameters
+                    )
+                    if segment is None:
+                        continue
+
+                if p_config.sliding_window:
+                    segment = average_sliding_window(
+                        segment, pd.Timedelta(p_config.window_size)
+                    )
+
+                segment_suffix = (
+                    f"_segment_{i+1}" if p_config.split_continuous_segments
+                    else ""
+                )
+                output_filename = (
+                    f"{filename.replace('.csv', '')}_processed"
+                    f"{segment_suffix}.csv"
+                )
+                output_filepath = os.path.join(
+                    p_config.dir_output, output_filename
                 )
 
-            if p_config.remove_outliers:
-                dataframe = remove_outliers_dataset(
-                    dataframe,
-                    p_config.outlier_mode,
-                    p_config.outlier_cols,
-                    mode_parameters=outliers_mode_parameters
-                )
-
-            if p_config.sliding_window:
-                dataframe = average_sliding_window(
-                    dataframe, pd.Timedelta(p_config.window_size)
-                )
-
-            output_filepath = os.path.join(p_config.dir_output, filename)
-            dataframe.to_csv(output_filepath, index=False)
-            logger.info(f"Processed file saved: {output_filepath}")
+                segment.to_csv(output_filepath, index=False)
+                logger.info(f"Processed file saved: {output_filepath}")

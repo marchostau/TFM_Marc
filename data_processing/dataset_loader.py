@@ -28,9 +28,13 @@ class WindTimeSeriesDataset(Dataset):
             feature_data = df[["u_component", "v_component"]].values
 
             if self.forecast_horizon == 1:
+                if len(df) < (len(feature_data) - self.lag):
+                    continue
                 for i in range(len(feature_data) - self.lag):
                     index.append((file_idx, i))
             else:
+                if len(df) < (len(feature_data) - self.lag - self.forecast_horizon + 1):
+                    continue
                 for i in range(
                     len(feature_data) - self.lag - self.forecast_horizon + 1
                 ):

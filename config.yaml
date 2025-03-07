@@ -5,6 +5,11 @@ dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_dat
 #dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/example_processed_csv"
 
 remove_duplicates: true
+remove_wrong_dates: true
+
+split_continuous_segments: true
+gap_threshold: "5m"
+
 normalize: true
 norm_mode: "z-standardization"
 norm_daily_based: false

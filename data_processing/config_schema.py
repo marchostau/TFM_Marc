@@ -22,6 +22,17 @@ class ProcessingConfig(BaseModel):
         False, description="Remove repeated timestamps"
     )
 
+    remove_wrong_dates: bool = Field(
+        False, description="Remove wrong timestamps"
+    )
+
+    split_continuous_segments: bool = Field(
+        False, description="Splite continous segments"
+    )
+    gap_threshold: str = Field(
+        "5m", description="Gap threshold size (e.g., '5m' for 5 minutes)"
+    )
+
     normalize: bool = Field(False, description="Apply normalization")
     norm_mode: Optional[NormalizationMode] = Field(
         None, description="Normalization mode"
