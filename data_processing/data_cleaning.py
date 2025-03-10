@@ -1,4 +1,3 @@
-import os
 from enum import Enum
 
 import numpy as np
@@ -7,7 +6,6 @@ from sklearn.cluster import DBSCAN
 from kneed import KneeLocator
 from sklearn.neighbors import NearestNeighbors
 
-from .utils import concatenate_datasets
 from ..logging_information.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -22,11 +20,6 @@ def compute_epsilon(dataframe: pd.DataFrame, n_neighbours: int, cols: list):
     nbrs = NearestNeighbors(
         n_neighbors=n_neighbours
     ).fit(dataframe[cols])
-
-    logger.info(f"Dataframe in compute epsilon:\n{dataframe}")
-    logger.info(f"N_neighbours: {n_neighbours}")
-    logger.info(f"Cols: {cols}")
-
     neigh_dist, neigh_ind = nbrs.kneighbors(
         dataframe[cols]
     )
@@ -153,62 +146,14 @@ def compute_outlier_params(
     return mode_parameters
 
 
-def remove_outliers_dir_dataset(
-        dir_source: str, dir_output: str,
-        mode: OutliersRemovalMode, cols: list,
-        daily_based: bool
-):
-    if not os.path.isdir(dir_source):
-        logger.error(f"Invalid directory: {dir_source}")
-        raise ValueError(f'{dir_source} is not a directory')
-
-    if not os.path.exists(dir_output):
-        os.makedirs(dir_output)
-        logger.info(f"Created output directory: {dir_output}")
-
-    mode_parameters = {}
-    if not daily_based:
-        logger.info("Data processing based on global strategy.")
-        logger.info("Concatenating datasets for global outlier detection.")
-        complete_df = concatenate_datasets(dir_source)
-        if complete_df.empty:
-            logger.warning(
-                "No valid data found in the source directory. "
-                "Skipping normalization."           
-            )
-            raise ValueError(
-                "No valid data found in the source directory. "
-                "Skipping normalization."
-            )
-        mode_parameters = compute_outlier_params(complete_df, mode, cols)
-    else:
-        logger.info("Data processing based on daily strategy.")
-
-    files = sorted(os.listdir(dir_source))
-    for filename in files:
-        file_path = os.path.join(dir_source, filename)
-        if os.path.isfile(file_path):
-            logger.info(f"Processing file for outlier removal: {filename}")
-            try:
-                dataframe = pd.read_csv(file_path, parse_dates=["timestamp"])
-            except ValueError:
-                logger.error(f"Error reading CSV file: {filename}")
-                continue
-            cleaned_df = remove_outliers_dataset(
-                dataframe, mode, cols, mode_parameters=mode_parameters
-            )
-
-            output_filepath = os.path.join(dir_output, filename)
-            cleaned_df.to_csv(output_filepath, index=False)
-            logger.info(f"Processed file saved: {output_filepath}")
-
-
 def remove_wrong_timestamps(dataframe: pd.DataFrame):
     logger.info("Removing wrong timestamps")
     original_len = len(dataframe)
     mode_timestamp = dataframe['timestamp'].dt.day.mode()[0]
     dataframe = dataframe[dataframe['timestamp'].dt.day == mode_timestamp]
-    logger.info(f"Removed {original_len - len(dataframe)} duplicated rows")
+    logger.info(
+        f"Removed {original_len - len(dataframe)} rows with wrong timestamps"
+    )
     return dataframe
 
 
@@ -220,36 +165,6 @@ def remove_repeated_timestamps(dataframe: pd.DataFrame):
     )
     logger.info(f"Removed {original_len - len(dataframe)} duplicated rows")
     return dataframe
-
-
-def remove_repeated_timestamps_dir(dir_source: str, dir_output: str):
-    if not os.path.isdir(dir_source):
-        logger.error(f"Invalid directory: {dir_source}")
-        raise ValueError(f'{dir_source} is not a directory')
-
-    if not os.path.exists(dir_output):
-        os.makedirs(dir_output)
-        logger.info(f"Created output directory: {dir_output}")
-
-    files = sorted(os.listdir(dir_source))
-    for filename in files:
-        if os.path.isfile(filename):
-            logger.info(
-                f"Processing file for repeated timestamps removal: {filename}"
-            )
-            file_path = os.path.join(dir_source, filename)
-            try:
-                dataframe = pd.read_csv(file_path, parse_dates=["timestamp"])
-            except ValueError:
-                logger.error(f"Error reading CSV file: {filename}")
-                continue
-            cleaned_df = remove_repeated_timestamps(dataframe)
-            output_filepath = os.path.join(dir_output, filename)
-            cleaned_df.to_csv(output_filepath, index=False)
-            logger.info(
-                "The repeated timestamps have been removed "
-                f"and the file is saved in: {output_filepath}"
-            )
 
 
 def split_continuous_segments(

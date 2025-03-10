@@ -45,8 +45,11 @@ def process_datasets(config_path: str):
         complete_df = concatenate_datasets(p_config.dir_source)
         if complete_df.empty:
             raise ValueError("No valid data found in the source directory.")
-        norm_mode_parameters["mean"] = complete_df[p_config.norm_cols].mean()
-        norm_mode_parameters["std"] = complete_df[p_config.norm_cols].std()
+        global_mean = complete_df[p_config.norm_cols].mean()
+        global_std = complete_df[p_config.norm_cols].std()
+        norm_mode_parameters["mean"] = global_mean
+        norm_mode_parameters["std"] = global_std
+        logger.info(f"Global mean: {global_mean} | std: {global_std}")
 
     files = sorted(os.listdir(p_config.dir_source))
     for filename in files:
@@ -60,7 +63,7 @@ def process_datasets(config_path: str):
                     f"Warning: CSV '{filename}' could not be read, skipping..."
                 )
                 continue
-
+            
             if p_config.remove_duplicates:
                 dataframe = remove_repeated_timestamps(dataframe)
 
