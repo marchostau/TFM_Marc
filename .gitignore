@@ -1,1 +1,5 @@
 datasets/
+logging_information/logs/app.log
+models/trained_models
+data_processing/__pycache__
+models/__pycache__/

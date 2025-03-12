@@ -1,11 +1,15 @@
 import os
+import tempfile
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import Subset
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from ray import tune
+from ray import train
+from ray.train import Checkpoint
 import pickle
 
 from ..data_processing.dataset_loader import WindTimeSeriesDataset, DataLoader
@@ -27,13 +31,21 @@ class NLinear(nn.Module):
 
 
 def split_dataset(dataset, train_ratio: int = 0.8):
+    logger.info(
+        f"Splitting dataset for training and "
+        f"testing (train_ratio: {train_ratio})"
+    )
     train_size = int(len(dataset) * train_ratio)
-    train_dataset = dataset[:train_size]
-    test_dataset = dataset[train_size:]
+    indices = list(range(len(dataset)))
+    logger.info(f"Train size: {train_size}")
+
+    train_dataset = Subset(dataset, indices[:train_size])
+    test_dataset = Subset(dataset, indices[train_size:])
+
     return train_dataset, test_dataset
 
 
-def train_model(config, checkpoint_dir=None, train_ratio: int = 0.8):
+def train_model(config, train_ratio: int = 0.8):
     logger.info("Initializing model for training...")
     logger.info(f"Training configuration: {config}")
 
@@ -57,18 +69,19 @@ def train_model(config, checkpoint_dir=None, train_ratio: int = 0.8):
     criterion = nn.MSELoss()
 
     start_epoch = 0
-    if checkpoint_dir:
-        checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pth")
-        if os.path.exists(checkpoint_path):
-            checkpoint = torch.load(checkpoint_path, map_location=device)
+    """    
+    checkpoint = train.get_checkpoint()
+    if checkpoint:
+        with checkpoint.as_directory() as checkpoint_dir:
+            checkpoint = torch.load(os.path.join(checkpoint_dir, "model.ckpt"))
             net.load_state_dict(checkpoint["model_state_dict"])
             optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             start_epoch = checkpoint["epoch"] + 1
             logger.info(
-                f"Resumed training from checkpoint: {checkpoint_path}, "
+                f"Resumed training from checkpoint: {checkpoint_dir}, "
                 f"starting at epoch {start_epoch}"
             )
-
+    """
     forecast_horizon = config["lag"]
     full_dataset = WindTimeSeriesDataset(
         config["dir_source"], lag=config["lag"],
@@ -86,8 +99,8 @@ def train_model(config, checkpoint_dir=None, train_ratio: int = 0.8):
     for epoch in range(start_epoch, config["epochs"]):
         epoch_loss = 0.0
         for inputs, true_labels in train_loader:
-            inputs = inputs.to_device()
-            true_labels = true_labels.to_device()
+            inputs = inputs.to(device)
+            true_labels = true_labels.to(device)
 
             optimizer.zero_grad()
             pred_labels = net(inputs)
@@ -101,19 +114,22 @@ def train_model(config, checkpoint_dir=None, train_ratio: int = 0.8):
             f"Epoch {epoch + 1}/{config['epochs']} - Loss: {avg_loss:.6f}"
         )
 
-        with tune.checkpoint_dir(step=epoch) as checkpoint_dir:
-            checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.pth")
-            torch.save({
-                "epoch": epoch,
-                "model_state_dict": net.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "loss": avg_loss
-            }, checkpoint_path)
+        with tempfile.TemporaryDirectory() as temp_checkpoint_dir:
+            metrics = {'epoch': epoch, 'loss': avg_loss}
 
-        tune.report(epoch=epoch + 1, loss=avg_loss)
+            if epoch % config["checkpoint_freq"] == 0:
+                torch.save({
+                    "epoch": epoch,
+                    "model_state_dict": net.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": avg_loss
+                }, os.path.join(temp_checkpoint_dir, "model.ckpt"))
+                checkpoint = Checkpoint.from_directory(temp_checkpoint_dir)
+                tune.report(metrics=metrics, checkpoint=checkpoint)
+            else:
+                tune.report(metrics)
 
     logger.info("Training completed!")
-    return net
 
 
 def evaluate_model(
@@ -206,17 +222,28 @@ def train_evaluate(config):
 
 search_space = {
     "lag": tune.grid_search([6, 9, 12]),
-    "forecast_horizon": tune.grid_search([6, 9, 12]),
+    #"forecast_horizon": tune.grid_search([6, 9, 12]),
     "batch_size": tune.grid_search([16, 32, 64]),
     "lr": tune.grid_search([0.001, 0.0005, 0.0001]),
     "dir_source": "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)",
     "optimizer": "adam",
-    "epochs": 200,
-    "shuffle": False
+    "epochs": 250,
+    "shuffle": False,
+    "checkpoint_freq": 10
 }
+"""
+search_space = {
+    "lag": tune.grid_search([6]),
+    #"forecast_horizon": tune.grid_search([6, 9, 12]),
+    "batch_size": tune.grid_search([16]),
+    "lr": tune.grid_search([0.001]),
+    "dir_source": "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)",
+    "optimizer": "adam",
+    "epochs": 10,
+    "shuffle": False,
+    "checkpoint_freq": 5
+}"
+"""
 
-def filter_config(config):
-    return config["lag"] == config["forecast_horizon"]
-
-# Run hyperparameter tuning with Ray Tune
-tune.run(train_evaluate, config=search_space)
+storage_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
+tune.run(train_model, config=search_space, storage_path=storage_path)
