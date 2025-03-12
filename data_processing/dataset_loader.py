@@ -5,6 +5,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from glob import glob
 
+from ..logging_information.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class WindTimeSeriesDataset(Dataset):
     def __init__(
@@ -18,6 +22,7 @@ class WindTimeSeriesDataset(Dataset):
         self.data_indices = self._build_index()
 
     def _build_index(self):
+        logger.info("Building index of the Wind Time Series Dataset")
         index = []
         for file_idx, file_path in enumerate(self.file_list):
             df = pd.read_csv(
@@ -28,18 +33,26 @@ class WindTimeSeriesDataset(Dataset):
 
             feature_data = df[["u_component", "v_component"]].values
 
+            if len(feature_data) < (self.lag + self.forecast_horizon):
+                logger.warning(
+                    f"Length df {len(df)} < {self.lag + self.forecast_horizon}"
+                    f" | File_idx: {file_idx} | File path: {file_path}"
+                )
+                continue
+
             if self.forecast_horizon == 1:
-                if len(df) < (len(feature_data) - self.lag):
-                    continue
                 for i in range(len(feature_data) - self.lag):
                     index.append((file_idx, i))
             else:
-                if len(df) < (len(feature_data) - self.lag - self.forecast_horizon + 1):
-                    continue
                 for i in range(
                     len(feature_data) - self.lag - self.forecast_horizon + 1
                 ):
                     index.append((file_idx, i))
+
+        logger.info(
+            f"Index of the Wind Time Series Dataset built | "
+            f"Length index: {len(index)}"
+        )
         return index
 
     def __len__(self):
@@ -55,7 +68,7 @@ class WindTimeSeriesDataset(Dataset):
         df.sort_values(by=["timestamp"], inplace=True)
 
         feature_data = df[["u_component", "v_component"]].values
-        
+
         if self.forecast_horizon == 1:
             X = feature_data[seq_start: seq_start + self.lag]  # Input sequence
             y = feature_data[seq_start + self.lag]  # Target

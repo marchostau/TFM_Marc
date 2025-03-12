@@ -8,7 +8,6 @@ import torch.optim as optim
 from torch.utils.data import Subset
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from ray import tune
-from ray import train
 from ray.train import Checkpoint
 import pickle
 
@@ -18,16 +17,33 @@ from ..logging_information.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+class Linear(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Linear, self).__init__()
+        self.linear = nn.Linear(input_size, output_size)
+
+    def forward(self, x):
+        # batch_size, seq_len, num_features = x.shape
+        # x = x.view(batch_size, -1)  # [batch_size, seq_len * num_features]
+        #out = self.linear(x)  # [batch_size, output_len * num_features]
+        # return out.view(batch_size, -1, num_features)  # [batch_size, output_len, num_features]
+        return self.linear(x.permute(0, 2, 1)).permute(0, 2, 1)
+
+
 class NLinear(nn.Module):
     def __init__(self, input_size, output_size):
         super(NLinear, self).__init__()
         self.linear = nn.Linear(input_size, output_size)
 
     def forward(self, x):
-        batch_size, seq_len, num_features = x.shape
-        x = x.view(batch_size, -1)  # [batch_size, seq_len * num_features]
-        out = self.linear(x)  # [batch_size, output_len * num_features]
-        return out.view(batch_size, -1, num_features)  # [batch_size, output_len, num_features]
+        # x: [Batch, Input length, Features]
+        seq_last = x[:, -1:, :].detach()  # Capture last timestep values for de-normalization
+        x = x - seq_last  # Normalize by subtracting last timestep
+
+        x = self.linear(x.permute(0, 2, 1)).permute(0, 2, 1)  # Linear layer and reshape
+
+        x = x + seq_last  # Reapply last timestep values
+        return x  # [Batch, Output length, Features]
 
 
 def split_dataset(dataset, train_ratio: int = 0.8):
@@ -48,12 +64,12 @@ def split_dataset(dataset, train_ratio: int = 0.8):
 def train_model(config, train_ratio: int = 0.8):
     logger.info("Initializing model for training...")
     logger.info(f"Training configuration: {config}")
-
-    input_size = config["lag"]*2
-    output_size = config["lag"]*2
-    net = NLinear( 
-        input_size=input_size, output_size=output_size
-    )
+    
+    lag, forecast_horizon = config["lag_forecast"]
+    input_size = lag
+    output_size = forecast_horizon
+    model_class = config["model_class"]
+    net = model_class(input_size=input_size, output_size=output_size)
 
     device = "cpu"
     if torch.cuda.is_available():
@@ -82,9 +98,8 @@ def train_model(config, train_ratio: int = 0.8):
                 f"starting at epoch {start_epoch}"
             )
     """
-    forecast_horizon = config["lag"]
     full_dataset = WindTimeSeriesDataset(
-        config["dir_source"], lag=config["lag"],
+        config["dir_source"], lag=lag,
         forecast_horizon=forecast_horizon
     )
     train_dataset, _ = split_dataset(full_dataset, train_ratio)
@@ -142,12 +157,12 @@ def evaluate_model(
     logger.info("Initializing model for evaluation...")
     logger.info(f"Evaluation configuration: {config}")
 
-    input_size = config["lag"]*2
-    output_size = config["lag"]*2
+    lag, forecast_horizon = config["lag_forecast"]
+    input_size = lag
+    output_size = forecast_horizon
     if net is None:
-        net = NLinear(
-            input_size=input_size, output_size=output_size
-        )
+        model_class = config["model_class"]
+        net = model_class(input_size=input_size, output_size=output_size)
 
     device = "cpu"
     if torch.cuda.is_available():
@@ -162,9 +177,8 @@ def evaluate_model(
         net.load_state_dict(checkpoint["model_state_dict"])
         logger.info(f"Loaded model checkpoint from: {checkpoint_path}")
 
-    forecast_horizon = config["lag"]
     full_dataset = WindTimeSeriesDataset(
-        config["dir_source"], lag=config["lag"],
+        config["dir_source"], lag=lag,
         forecast_horizon=forecast_horizon, train=False
     )
     _, test_dataset = split_dataset(full_dataset, train_ratio)
@@ -198,7 +212,8 @@ def evaluate_model(
     )
 
     if save_dir:
-        filename = f"NLinear_lag{config['lag']}_horizon{forecast_horizon}_batch{config['batch_size']}_opt{config['optimizer']}_lr{config['lr']}_epochs{config['epochs']}.pkl"
+        model_name = config["model_class"].__name__
+        filename = f"{model_name}_lag{lag}_horizon{forecast_horizon}_batch{config['batch_size']}_opt{config['optimizer']}_lr{config['lr']}_epochs{config['epochs']}.pkl"
         file_path = os.path.join(save_dir, filename)
         os.makedirs(file_path, exist_ok=True)
 
@@ -219,31 +234,35 @@ def train_evaluate(config):
     results = evaluate_model(config, net=trained_model)
     return {"r2": results["r2"], "mse": results["mse"], "mae": results["mae"]}
 
-
+"""
 search_space = {
-    "lag": tune.grid_search([6, 9, 12]),
-    #"forecast_horizon": tune.grid_search([6, 9, 12]),
+    "model_class": tune.grid_search([Linear, NLinear]),
+    "lag_forecast": tune.grid_search(
+        [(6, 6), (9, 9), (12, 12)]
+    ),
     "batch_size": tune.grid_search([16, 32, 64]),
     "lr": tune.grid_search([0.001, 0.0005, 0.0001]),
     "dir_source": "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)",
     "optimizer": "adam",
     "epochs": 250,
     "shuffle": False,
-    "checkpoint_freq": 10
+    "checkpoint_freq": 10,
+    "num_features": 2
 }
 """
 search_space = {
-    "lag": tune.grid_search([6]),
-    #"forecast_horizon": tune.grid_search([6, 9, 12]),
+    "model_class": tune.grid_search([Linear, NLinear]),
+    "lag_forecast": tune.grid_search([(6, 6)]),
     "batch_size": tune.grid_search([16]),
     "lr": tune.grid_search([0.001]),
     "dir_source": "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)",
     "optimizer": "adam",
-    "epochs": 10,
+    "epochs": 2,
     "shuffle": False,
-    "checkpoint_freq": 5
-}"
-"""
+    "checkpoint_freq": 5,
+    "num_features": 2
+}
+
 
 storage_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
 tune.run(train_model, config=search_space, storage_path=storage_path)
