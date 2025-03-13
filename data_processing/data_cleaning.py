@@ -5,10 +5,22 @@ import pandas as pd
 from sklearn.cluster import DBSCAN
 from kneed import KneeLocator
 from sklearn.neighbors import NearestNeighbors
+from shapely.geometry import Point, Polygon
 
 from ..logging_information.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+POLYGON_BOUNDARY = Polygon([
+    (5.349313440978377, 43.275591198768616),
+    (5.367778305562085, 43.26506534999766),
+    (5.37032937237957, 43.25082159837905),
+    (5.323438334686732, 43.213736837179866),
+    (5.290496030531076, 43.220399467447145),
+    (5.289667069198106, 43.25241423293851),
+    (5.328783427066224, 43.27718318546221)
+])
 
 
 class OutliersRemovalMode(str, Enum):
@@ -144,6 +156,30 @@ def compute_outlier_params(
             raise ValueError(f"Invalid mode: {mode}")
 
     return mode_parameters
+
+
+def convert_to_decimal(coord):
+    """Convert latitude/longitude from DDMM.MMMM to decimal degrees."""
+    degrees = int(coord // 100)  # Extract degrees
+    minutes = coord % 100        # Extract minutes
+    return degrees + (minutes / 60)  # Convert to decimal degrees
+
+
+def remove_points_outside_polygon(dataframe: pd.DataFrame):
+    logger.info("Discarding points outside the defined polygon")
+    original_len = len(dataframe)
+    dataframe = dataframe[
+        dataframe.apply(
+            lambda row: POLYGON_BOUNDARY.contains(
+                Point(convert_to_decimal(float(row["longitude"])),
+                      convert_to_decimal(float(row["latitude"])))
+            ),
+            axis=1
+        )
+    ]
+
+    logger.info(f"Kept {len(dataframe)} points inside the polygon, removed {original_len - len(dataframe)} points")
+    return dataframe
 
 
 def remove_wrong_timestamps(dataframe: pd.DataFrame):

@@ -2,6 +2,7 @@ import os
 import tempfile
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,7 +10,8 @@ from torch.utils.data import Subset
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from ray import tune
 from ray.train import Checkpoint
-import pickle
+from ray.tune import ExperimentAnalysis
+import matplotlib.pyplot as plt
 
 from ..data_processing.dataset_loader import WindTimeSeriesDataset, DataLoader
 from ..logging_information.logging_config import get_logger
@@ -64,7 +66,7 @@ def split_dataset(dataset, train_ratio: int = 0.8):
 def train_model(config, train_ratio: int = 0.8):
     logger.info("Initializing model for training...")
     logger.info(f"Training configuration: {config}")
-    
+
     lag, forecast_horizon = config["lag_forecast"]
     input_size = lag
     output_size = forecast_horizon
@@ -152,7 +154,6 @@ def evaluate_model(
         net=None,
         checkpoint_path=None,
         train_ratio: int = 0.8,
-        save_dir: str = None
 ):
     logger.info("Initializing model for evaluation...")
     logger.info(f"Evaluation configuration: {config}")
@@ -179,7 +180,7 @@ def evaluate_model(
 
     full_dataset = WindTimeSeriesDataset(
         config["dir_source"], lag=lag,
-        forecast_horizon=forecast_horizon, train=False
+        forecast_horizon=forecast_horizon
     )
     _, test_dataset = split_dataset(full_dataset, train_ratio)
     test_loader = DataLoader(
@@ -203,42 +204,83 @@ def evaluate_model(
     all_preds_conc = np.concatenate(all_preds, axis=0)
     all_labels_conc = np.concatenate(all_labels, axis=0)
 
-    r2 = r2_score(all_labels_conc, all_preds_conc)
+    all_preds_conc = all_preds_conc.reshape(all_preds_conc.shape[0], -1)
+    all_labels_conc = all_labels_conc.reshape(all_labels_conc.shape[0], -1)
+
     mse = mean_squared_error(all_labels_conc, all_preds_conc)
     mae = mean_absolute_error(all_labels_conc, all_preds_conc)
+    r2 = r2_score(all_labels_conc, all_preds_conc)
 
     logger.info(
         f"Evaluation Completed:\n R²: {r2:.4f}, MSE: {mse:.4f}, MAE: {mae:.4f}"
     )
 
-    if save_dir:
-        model_name = config["model_class"].__name__
-        filename = f"{model_name}_lag{lag}_horizon{forecast_horizon}_batch{config['batch_size']}_opt{config['optimizer']}_lr{config['lr']}_epochs{config['epochs']}.pkl"
-        file_path = os.path.join(save_dir, filename)
-        os.makedirs(file_path, exist_ok=True)
-
-    with open(file_path, "wb") as f:
-        pickle.dump({
-            "all_preds": all_preds,
-            "all_labels": all_labels,
-            "r2": r2,
-            "mse": mse,
-            "mae": mae
-        }, f)
-
     return {"r2": r2, "mse": mse, "mae": mae}
 
 
-def train_evaluate(config):
-    trained_model = train_model(config)
-    results = evaluate_model(config, net=trained_model)
-    return {"r2": results["r2"], "mse": results["mse"], "mae": results["mae"]}
+def save_experiment_loss_plots(experiment_path: str, plot_save_path: str):
+    analysis = ExperimentAnalysis(experiment_path)
 
-"""
+    for trial in analysis.trials:
+        trial_id = trial.trial_id
+        batch_size = trial.evaluated_params["batch_size"]
+        lag, forecast = trial.evaluated_params["lag_forecast"]
+        learning_rate = trial.evaluated_params["lr"]
+        model_name = trial.config["model_class"].__name__
+        df = analysis.trial_dataframes[trial_id]
+
+        plt.figure(figsize=(8, 5))
+        plt.plot(
+            df["training_iteration"], df["loss"], 
+            marker="o", linestyle="-", label=f"Loss Curve"
+        )
+
+        plt.xlabel("Training Iteration")
+        plt.ylabel("Loss")
+        plt.title(f"{model_name} - Loss vs. Training Iteration")
+        plt.legend(loc="best", fontsize="small")
+        plt.grid(True)
+
+        plot_filename = f"{model_name}_batch{batch_size}_lag{lag}_horizon{forecast}_lr{learning_rate}.png"
+        plot_filepath = os.path.join(plot_save_path, plot_filename)
+        plt.savefig(plot_filepath, dpi=300)
+        plt.close()  # Close the figure to free memory
+
+
+def save_experiment_testing_results(
+        experiment_path: str, output_csv_path: str, train_ratio: int=0.8
+):
+    analysis = ExperimentAnalysis(experiment_path)
+    results = []
+
+    for trial in analysis.trials:
+        config = trial.config
+        checkpoint = trial.checkpoint
+
+        if checkpoint:
+            model_class = config["model_class"]
+            input_size = config["lag_forecast"][0]
+            output_size = config["lag_forecast"][1]
+            model = model_class(input_size=input_size, output_size=output_size)
+            checkpoint_path = os.path.join(checkpoint.path, "model.ckpt")
+            model.load_state_dict(torch.load(checkpoint_path)["model_state_dict"])
+
+            metrics = evaluate_model(config, net=model, train_ratio=train_ratio)
+            metrics["trial_id"] = trial.trial_id
+            metrics["config"] = config
+            results.append(metrics)
+
+            break
+
+    df = pd.DataFrame(results)
+    df.to_csv(output_csv_path, index=False)
+    logger.info(f"Experiment results saved to {output_csv_path}")
+
+
 search_space = {
     "model_class": tune.grid_search([Linear, NLinear]),
     "lag_forecast": tune.grid_search(
-        [(6, 6), (9, 9), (12, 12)]
+        [(6, 3), (9, 3), (12, 6)]
     ),
     "batch_size": tune.grid_search([16, 32, 64]),
     "lr": tune.grid_search([0.001, 0.0005, 0.0001]),
@@ -249,20 +291,13 @@ search_space = {
     "checkpoint_freq": 10,
     "num_features": 2
 }
-"""
-search_space = {
-    "model_class": tune.grid_search([Linear, NLinear]),
-    "lag_forecast": tune.grid_search([(6, 6)]),
-    "batch_size": tune.grid_search([16]),
-    "lr": tune.grid_search([0.001]),
-    "dir_source": "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)",
-    "optimizer": "adam",
-    "epochs": 2,
-    "shuffle": False,
-    "checkpoint_freq": 5,
-    "num_features": 2
-}
-
 
 storage_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
 tune.run(train_model, config=search_space, storage_path=storage_path)
+
+# experiment_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models/train_model_2025-03-12_20-16-56'
+# plot_save_path = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/loss_plots/linear_models"
+# results_save_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/evaluate_results/linear_models/results_test.csv'
+
+# save_experiment_loss_plots(experiment_path, plot_save_path)
+# save_experiment_testing_results(experiment_path, results_save_path)

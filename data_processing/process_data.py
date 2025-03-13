@@ -6,6 +6,7 @@ from .data_cleaning import (
     remove_wrong_timestamps,
     remove_repeated_timestamps,
     remove_outliers_dataset,
+    remove_points_outside_polygon,
     compute_outlier_params,
     split_continuous_segments,
     average_sliding_window,
@@ -69,6 +70,9 @@ def process_datasets(config_path: str):
 
             if p_config.remove_wrong_dates:
                 dataframe = remove_wrong_timestamps(dataframe)
+
+            if p_config.remove_points_outside_polygon:
+                dataframe = remove_points_outside_polygon(dataframe)
 
             if p_config.split_continuous_segments:
                 segments = split_continuous_segments(

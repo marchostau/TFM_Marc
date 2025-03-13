@@ -26,6 +26,10 @@ class ProcessingConfig(BaseModel):
         False, description="Remove wrong timestamps"
     )
 
+    remove_points_outside_polygon: bool = Field(
+        False, description="Remove wrong timestamps"
+    )
+
     split_continuous_segments: bool = Field(
         False, description="Splite continous segments"
     )
