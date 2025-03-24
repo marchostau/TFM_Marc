@@ -6,7 +6,6 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Subset
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from ray import tune
 from ray.train import Checkpoint
@@ -15,6 +14,7 @@ import matplotlib.pyplot as plt
 
 from ..data_processing.dataset_loader import WindTimeSeriesDataset, DataLoader
 from ..logging_information.logging_config import get_logger
+from .utils import split_dataset
 
 logger = get_logger(__name__)
 
@@ -25,10 +25,6 @@ class Linear(nn.Module):
         self.linear = nn.Linear(input_size, output_size)
 
     def forward(self, x):
-        # batch_size, seq_len, num_features = x.shape
-        # x = x.view(batch_size, -1)  # [batch_size, seq_len * num_features]
-        #out = self.linear(x)  # [batch_size, output_len * num_features]
-        # return out.view(batch_size, -1, num_features)  # [batch_size, output_len, num_features]
         return self.linear(x.permute(0, 2, 1)).permute(0, 2, 1)
 
 
@@ -39,31 +35,18 @@ class NLinear(nn.Module):
 
     def forward(self, x):
         # x: [Batch, Input length, Features]
-        seq_last = x[:, -1:, :].detach()  # Capture last timestep values for de-normalization
+        # Capture last timestep values for de-normalization
+        seq_last = x[:, -1:, :].detach()
         x = x - seq_last  # Normalize by subtracting last timestep
 
-        x = self.linear(x.permute(0, 2, 1)).permute(0, 2, 1)  # Linear layer and reshape
+        # Linear layer and reshape
+        x = self.linear(x.permute(0, 2, 1)).permute(0, 2, 1)
 
         x = x + seq_last  # Reapply last timestep values
         return x  # [Batch, Output length, Features]
 
 
-def split_dataset(dataset, train_ratio: int = 0.8):
-    logger.info(
-        f"Splitting dataset for training and "
-        f"testing (train_ratio: {train_ratio})"
-    )
-    train_size = int(len(dataset) * train_ratio)
-    indices = list(range(len(dataset)))
-    logger.info(f"Train size: {train_size}")
-
-    train_dataset = Subset(dataset, indices[:train_size])
-    test_dataset = Subset(dataset, indices[train_size:])
-
-    return train_dataset, test_dataset
-
-
-def train_model(config, train_ratio: int = 0.8):
+def train_linear_model(config, train_ratio: int = 0.8):
     logger.info("Initializing model for training...")
     logger.info(f"Training configuration: {config}")
 
@@ -87,7 +70,7 @@ def train_model(config, train_ratio: int = 0.8):
     criterion = nn.MSELoss()
 
     start_epoch = 0
-    """    
+    """
     checkpoint = train.get_checkpoint()
     if checkpoint:
         with checkpoint.as_directory() as checkpoint_dir:
@@ -126,6 +109,11 @@ def train_model(config, train_ratio: int = 0.8):
             optimizer.step()
             epoch_loss += loss.item()
 
+            logger.info(f"Inputs:\n{inputs}")
+            logger.info(f"True labels:\n{true_labels}")
+            logger.info(f"Pred labels:\n{pred_labels}")
+            logger.info(f"Epoch loss: {epoch_loss}")
+
         avg_loss = epoch_loss / len(train_loader)
         logger.info(
             f"Epoch {epoch + 1}/{config['epochs']} - Loss: {avg_loss:.6f}"
@@ -149,13 +137,13 @@ def train_model(config, train_ratio: int = 0.8):
     logger.info("Training completed!")
 
 
-def evaluate_model(
+def evaluate_linear_model(
         config,
         net=None,
         checkpoint_path=None,
         train_ratio: int = 0.8,
 ):
-    logger.info("Initializing model for evaluation...")
+    logger.info("Initializing linear model for evaluation...")
     logger.info(f"Evaluation configuration: {config}")
 
     lag, forecast_horizon = config["lag_forecast"]
@@ -212,7 +200,8 @@ def evaluate_model(
     r2 = r2_score(all_labels_conc, all_preds_conc)
 
     logger.info(
-        f"Evaluation Completed:\n R²: {r2:.4f}, MSE: {mse:.4f}, MAE: {mae:.4f}"
+        f"Evaluation with Linear models Completed:\n"
+        f"R²: {r2:.4f}, MSE: {mse:.4f}, MAE: {mae:.4f}"
     )
 
     return {"r2": r2, "mse": mse, "mae": mae}
@@ -231,8 +220,8 @@ def save_experiment_loss_plots(experiment_path: str, plot_save_path: str):
 
         plt.figure(figsize=(8, 5))
         plt.plot(
-            df["training_iteration"], df["loss"], 
-            marker="o", linestyle="-", label=f"Loss Curve"
+            df["training_iteration"], df["loss"],
+            marker="o", linestyle="-", label="Loss Curve"
         )
 
         plt.xlabel("Training Iteration")
@@ -241,14 +230,18 @@ def save_experiment_loss_plots(experiment_path: str, plot_save_path: str):
         plt.legend(loc="best", fontsize="small")
         plt.grid(True)
 
-        plot_filename = f"{model_name}_batch{batch_size}_lag{lag}_horizon{forecast}_lr{learning_rate}.png"
+        plot_filename = (
+            f"{model_name}_batch{batch_size}_lag{lag}"
+            f"_horizon{forecast}_lr{learning_rate}.png"
+        )
+
         plot_filepath = os.path.join(plot_save_path, plot_filename)
         plt.savefig(plot_filepath, dpi=300)
-        plt.close()  # Close the figure to free memory
+        plt.close()
 
 
 def save_experiment_testing_results(
-        experiment_path: str, output_csv_path: str, train_ratio: int=0.8
+        experiment_path: str, output_csv_path: str, train_ratio: int = 0.8
 ):
     analysis = ExperimentAnalysis(experiment_path)
     results = []
@@ -263,41 +256,68 @@ def save_experiment_testing_results(
             output_size = config["lag_forecast"][1]
             model = model_class(input_size=input_size, output_size=output_size)
             checkpoint_path = os.path.join(checkpoint.path, "model.ckpt")
-            model.load_state_dict(torch.load(checkpoint_path)["model_state_dict"])
+            model.load_state_dict(
+                torch.load(checkpoint_path)["model_state_dict"]
+            )
 
-            metrics = evaluate_model(config, net=model, train_ratio=train_ratio)
+            metrics = evaluate_linear_model(
+                config, net=model, train_ratio=train_ratio
+            )
             metrics["trial_id"] = trial.trial_id
             metrics["config"] = config
             results.append(metrics)
-
-            break
 
     df = pd.DataFrame(results)
     df.to_csv(output_csv_path, index=False)
     logger.info(f"Experiment results saved to {output_csv_path}")
 
 
+"""
 search_space = {
     "model_class": tune.grid_search([Linear, NLinear]),
-    "lag_forecast": tune.grid_search(
-        [(6, 3), (9, 3), (12, 6)]
+    "lag_forecast": tune.grid_search([
+        (3, 3), (6, 6), (9, 9),
+        (12, 12), (6, 3), (9, 3),
+        (9, 6), (12, 6), (12, 9)
+    ]
     ),
     "batch_size": tune.grid_search([16, 32, 64]),
     "lr": tune.grid_search([0.001, 0.0005, 0.0001]),
-    "dir_source": "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)",
+    "dir_source": (
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+        "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+    ),
     "optimizer": "adam",
-    "epochs": 250,
+    "epochs": 100,
     "shuffle": False,
-    "checkpoint_freq": 10,
+    "checkpoint_freq": 25,
     "num_features": 2
 }
 
-storage_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
-tune.run(train_model, config=search_space, storage_path=storage_path)
 
-# experiment_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models/train_model_2025-03-12_20-16-56'
-# plot_save_path = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/loss_plots/linear_models"
-# results_save_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/evaluate_results/linear_models/results_test.csv'
+# storage_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/'
+# 'trained_models'
+# tune.run(train_linear_model, config=search_space,
+#          storage_path=storage_path)
 
-# save_experiment_loss_plots(experiment_path, plot_save_path)
-# save_experiment_testing_results(experiment_path, results_save_path)
+experiment_path = (
+    '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models/'
+    'train_model_2025-03-19_19-10-39'
+)
+
+plot_save_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/loss_plots/"
+    "linear_models/WithPointsOutsidePortRemoval[(3,3),(6,6),(9,9),(12,12),"
+    "(6,3),(9,3),(9,6),(12,6),(12,9)]"
+)
+
+results_save_path = (
+    '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/'
+    'evaluate_results/linear_models/results[(3,3),(6,6),(9,9),(12,12),'
+    '(6,3),(9,3),(9,6),(12,6),(12,9)].csv'
+)
+
+save_experiment_loss_plots(experiment_path, plot_save_path)
+save_experiment_testing_results(experiment_path, results_save_path)
+
+"""

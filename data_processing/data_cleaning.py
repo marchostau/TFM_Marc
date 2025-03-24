@@ -178,15 +178,30 @@ def remove_points_outside_polygon(dataframe: pd.DataFrame):
         )
     ]
 
-    logger.info(f"Kept {len(dataframe)} points inside the polygon, removed {original_len - len(dataframe)} points")
+    logger.info(
+        f"Kept {len(dataframe)} points inside the polygon, "
+        f"removed {original_len - len(dataframe)} points"
+    )
     return dataframe
 
 
 def remove_wrong_timestamps(dataframe: pd.DataFrame):
     logger.info("Removing wrong timestamps")
     original_len = len(dataframe)
-    mode_timestamp = dataframe['timestamp'].dt.day.mode()[0]
-    dataframe = dataframe[dataframe['timestamp'].dt.day == mode_timestamp]
+
+    mode_timestamp_day = dataframe['timestamp'].dt.day.mode()[0]
+    dataframe = dataframe[dataframe['timestamp'].dt.day == mode_timestamp_day]
+
+    mode_timestamp_month = dataframe['timestamp'].dt.month.mode()[0]
+    dataframe = dataframe[
+        dataframe['timestamp'].dt.month == mode_timestamp_month
+    ]
+
+    mode_timestamp_year = dataframe['timestamp'].dt.year.mode()[0]
+    dataframe = dataframe[
+        dataframe['timestamp'].dt.year == mode_timestamp_year
+    ]
+
     logger.info(
         f"Removed {original_len - len(dataframe)} rows with wrong timestamps"
     )

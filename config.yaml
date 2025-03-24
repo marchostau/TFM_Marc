@@ -6,9 +6,10 @@ dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/example_proc
 
 remove_duplicates: true
 remove_wrong_dates: true
+remove_points_outside_polygon: true
 
 split_continuous_segments: true
-gap_threshold: "5m"
+gap_threshold: "10m"
 
 normalize: true
 norm_mode: "z-standardization"

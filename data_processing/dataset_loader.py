@@ -1,8 +1,10 @@
 import os
+import csv
+import random
 
 import pandas as pd
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from glob import glob
 
 from ..logging_information.logging_config import get_logger
@@ -12,17 +14,31 @@ logger = get_logger(__name__)
 
 class WindTimeSeriesDataset(Dataset):
     def __init__(
-            self, dir_source: str, lag: int = 6, forecast_horizon: int = 1
+            self, dir_source: str, lag: int = 6,
+            forecast_horizon: int = 1, randomize: bool = True,
+            use_fixed_seed: bool = True
     ):
         self.lag = lag
         self.forecast_horizon = forecast_horizon
         self.file_list = sorted(
             glob(os.path.join(dir_source, "*.csv"))
         )
+
+        if randomize:
+            if use_fixed_seed:
+                random.seed(0)
+            random.shuffle(self.file_list)
+
         self.data_indices = self._build_index()
 
     def _build_index(self):
         logger.info("Building index of the Wind Time Series Dataset")
+        logger.info(
+            f"Configuration: Lag = {self.lag} | "
+            f"Forecast Horizon = {self.forecast_horizon}"
+        )
+        dataset_info = {}
+        lost_timestamps = 0
         index = []
         for file_idx, file_path in enumerate(self.file_list):
             df = pd.read_csv(
@@ -38,19 +54,42 @@ class WindTimeSeriesDataset(Dataset):
                     f"Length df {len(df)} < {self.lag + self.forecast_horizon}"
                     f" | File_idx: {file_idx} | File path: {file_path}"
                 )
+                logger.warning(f"File {file_path} has 0 sequences")
+                lost_timestamps += len(df)
+                limit = self.lag + self.forecast_horizon
+                dataset_info[file_path] = f"0 ({len(df)} < {limit})"
                 continue
 
+            num_sequences = 0
             if self.forecast_horizon == 1:
                 for i in range(len(feature_data) - self.lag):
                     index.append((file_idx, i))
+                    num_sequences += 1
             else:
                 for i in range(
                     len(feature_data) - self.lag - self.forecast_horizon + 1
                 ):
                     index.append((file_idx, i))
+                    num_sequences += 1
+
+            dataset_info[file_path] = num_sequences
+            logger.info(f"File {file_path} has {num_sequences} of sequences")
+
+        dataset_info["LOST TIMESTAMPS"] = lost_timestamps
+        dataset_info["TOTAL"] = len(index)
+
+        file_out_path = (
+            f'/home/marchostau/Desktop/TFM/Code/'
+            f'ProjectCode/datasets/summary_sequences_datasets/'
+            f'summ_{self.lag}_{self.forecast_horizon}.csv'
+        )
+        with open(file_out_path, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerows(dataset_info.items())
 
         logger.info(
-            f"Index of the Wind Time Series Dataset built | "
+            f"Index of the Wind Time Series Dataset built for "
+            f"lag {self.lag} and forecast {self.forecast_horizon} -> "
             f"Length index: {len(index)}"
         )
         return index
@@ -80,20 +119,3 @@ class WindTimeSeriesDataset(Dataset):
 
         return (torch.tensor(X, dtype=torch.float32),
                 torch.tensor(y, dtype=torch.float32))
-
-
-"""
-dir_source = "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
-lag = 6
-batch_size = 32
-forecast_horizon = 12
-
-dataset = WindTimeSeriesDataset(dir_source, lag=lag, forecast_horizon=forecast_horizon)
-#dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)  # Enable parallel loading
-print(f"Total number of sequences: {len(dataset)}")
-print(f"Dataset:\n{dataset}")
-
-#for X_batch, y_batch in dataloader:
-#    print("Input shape:", X_batch.shape)  # (batch_size, lag, num_features)
-#    print("Target shape:", y_batch.shape)  # (batch_size, num_features)
-"""

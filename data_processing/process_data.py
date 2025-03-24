@@ -64,7 +64,7 @@ def process_datasets(config_path: str):
                     f"Warning: CSV '{filename}' could not be read, skipping..."
                 )
                 continue
-            
+
             if p_config.remove_duplicates:
                 dataframe = remove_repeated_timestamps(dataframe)
 
@@ -82,6 +82,15 @@ def process_datasets(config_path: str):
                 segments = [dataframe]
 
             for i, segment in enumerate(segments):
+                segment_suffix = (
+                    f"_segment_{i+1}" if p_config.split_continuous_segments
+                    else ""
+                )
+
+                output_filename = (
+                    f"{filename.replace('.csv', '')}_processed"
+                    f"{segment_suffix}.csv"
+                )
                 if p_config.normalize:
                     segment = normalize_dataset(
                         segment,
@@ -105,14 +114,6 @@ def process_datasets(config_path: str):
                         segment, pd.Timedelta(p_config.window_size)
                     )
 
-                segment_suffix = (
-                    f"_segment_{i+1}" if p_config.split_continuous_segments
-                    else ""
-                )
-                output_filename = (
-                    f"{filename.replace('.csv', '')}_processed"
-                    f"{segment_suffix}.csv"
-                )
                 output_filepath = os.path.join(
                     p_config.dir_output, output_filename
                 )
