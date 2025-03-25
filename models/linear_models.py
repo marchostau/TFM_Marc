@@ -11,8 +11,9 @@ from ray import tune
 from ray.train import Checkpoint
 from ray.tune import ExperimentAnalysis
 import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader
 
-from ..data_processing.dataset_loader import WindTimeSeriesDataset, DataLoader
+from ..data_processing.dataset_loader import WindTimeSeriesDataset
 from ..logging_information.logging_config import get_logger
 from .utils import split_dataset
 
@@ -88,6 +89,7 @@ def train_linear_model(config, train_ratio: int = 0.8):
         forecast_horizon=forecast_horizon
     )
     train_dataset, _ = split_dataset(full_dataset, train_ratio)
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
@@ -171,6 +173,7 @@ def evaluate_linear_model(
         forecast_horizon=forecast_horizon
     )
     _, test_dataset = split_dataset(full_dataset, train_ratio)
+
     test_loader = DataLoader(
         test_dataset,
         batch_size=config["batch_size"],
@@ -271,7 +274,6 @@ def save_experiment_testing_results(
     df.to_csv(output_csv_path, index=False)
     logger.info(f"Experiment results saved to {output_csv_path}")
 
-
 """
 search_space = {
     "model_class": tune.grid_search([Linear, NLinear]),
@@ -293,31 +295,51 @@ search_space = {
     "checkpoint_freq": 25,
     "num_features": 2
 }
+"""
+search_space = {
+    "model_class": tune.grid_search([Linear]),
+    "lag_forecast": tune.grid_search([(9, 3), (9, 6)]),
+    "batch_size": tune.grid_search([16]),
+    "lr": tune.grid_search([0.001]),
+    #"dir_source": (
+    #    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    #    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+    #),
+    "dir_source": (
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+        "complete_datasets_csv_processed_5m_zstd(daily)_dbscan(daily)"
+    ),
+    "optimizer": "adam",
+    "epochs": 100,
+    "shuffle": False,
+    "checkpoint_freq": 25,
+    "num_features": 2
+}
 
-
-# storage_path = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/'
-# 'trained_models'
-# tune.run(train_linear_model, config=search_space,
-#          storage_path=storage_path)
+"""
+storage_path = (
+    '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
+)
+tune.run(
+    train_linear_model, config=search_space, storage_path=storage_path
+)
+"""
 
 experiment_path = (
-    '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models/'
-    'train_model_2025-03-19_19-10-39'
+    '/home/marchostau/Desktop/TFM/Code/ProjectCode/'
+    'models/trained_models/train_linear_model_2025-03-25_12-24-17'
 )
 
 plot_save_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/loss_plots/"
-    "linear_models/WithPointsOutsidePortRemoval[(3,3),(6,6),(9,9),(12,12),"
-    "(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/"
+    "loss_plots/linear_models/WithPointsOutsidePortRemoval"
+    "[(9,3),(9,6)]_norm_daily"
 )
 
 results_save_path = (
     '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/'
-    'evaluate_results/linear_models/results[(3,3),(6,6),(9,9),(12,12),'
-    '(6,3),(9,3),(9,6),(12,6),(12,9)].csv'
+    'evaluate_results/linear_models/results[(9,3),(9,6)]_norm_daily.csv'
 )
 
 save_experiment_loss_plots(experiment_path, plot_save_path)
 save_experiment_testing_results(experiment_path, results_save_path)
-
-"""
