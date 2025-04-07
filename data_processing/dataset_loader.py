@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from glob import glob
 
 from ..logging_information.logging_config import get_logger
+from ..models.utils import split_dataset
 
 logger = get_logger(__name__)
 
@@ -16,7 +17,7 @@ class WindTimeSeriesDataset(Dataset):
     def __init__(
             self, dir_source: str, lag: int = 6,
             forecast_horizon: int = 1, randomize: bool = True,
-            use_fixed_seed: bool = True
+            random_seed: int = 0
     ):
         self.lag = lag
         self.forecast_horizon = forecast_horizon
@@ -25,11 +26,14 @@ class WindTimeSeriesDataset(Dataset):
         )
 
         if randomize:
-            if use_fixed_seed:
-                random.seed(0)
+            random.seed(random_seed)
             random.shuffle(self.file_list)
 
+        logger.info(f"Randomize: {randomize} | Random seed: {random_seed}")
+        logger.info(f"File list: {self.file_list}")
+
         self.data_indices = self._build_index()
+        logger.info(f"Data indices: {self.data_indices}")
 
     def _build_index(self):
         logger.info("Building index of the Wind Time Series Dataset")
@@ -79,8 +83,7 @@ class WindTimeSeriesDataset(Dataset):
         dataset_info["TOTAL"] = len(index)
 
         file_out_path = (
-            f'/home/marchostau/Desktop/TFM/Code/'
-            f'ProjectCode/datasets/summary_sequences_datasets/'
+            f'/home/marchostau/Desktop/'
             f'summ_{self.lag}_{self.forecast_horizon}.csv'
         )
         with open(file_out_path, "w", newline="") as f:

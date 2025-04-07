@@ -51,10 +51,24 @@ def train_linear_model(config, train_ratio: int = 0.8):
     logger.info("Initializing model for training...")
     logger.info(f"Training configuration: {config}")
 
+    random_seed = config.get("random_seed", 0)    
     lag, forecast_horizon = config["lag_forecast"]
     input_size = lag
     output_size = forecast_horizon
     model_class = config["model_class"]
+
+    #train_num_seq = config.get("train_num_seq")
+    cap_data = config.get("cap_data", False)
+    if cap_data:
+        if forecast_horizon == 3:
+            train_num_seq = 8275
+        elif forecast_horizon == 6:
+            train_num_seq = 5936
+        elif forecast_horizon == 9:
+            train_num_seq = 4885
+        elif forecast_horizon == 12:
+            train_num_seq = 3924 
+
     net = model_class(input_size=input_size, output_size=output_size)
 
     device = "cpu"
@@ -86,9 +100,14 @@ def train_linear_model(config, train_ratio: int = 0.8):
     """
     full_dataset = WindTimeSeriesDataset(
         config["dir_source"], lag=lag,
-        forecast_horizon=forecast_horizon
+        forecast_horizon=forecast_horizon,
+        randomize=True, random_seed=random_seed
     )
     train_dataset, _ = split_dataset(full_dataset, train_ratio)
+
+    if train_num_seq:
+        train_dataset.indices = train_dataset.indices[:train_num_seq]
+        logger.info(f"Capped data, train dataset length: {len(train_dataset)}")
 
     train_loader = DataLoader(
         train_dataset,
@@ -110,11 +129,6 @@ def train_linear_model(config, train_ratio: int = 0.8):
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item()
-
-            logger.info(f"Inputs:\n{inputs}")
-            logger.info(f"True labels:\n{true_labels}")
-            logger.info(f"Pred labels:\n{pred_labels}")
-            logger.info(f"Epoch loss: {epoch_loss}")
 
         avg_loss = epoch_loss / len(train_loader)
         logger.info(
@@ -141,6 +155,7 @@ def train_linear_model(config, train_ratio: int = 0.8):
 
 def evaluate_linear_model(
         config,
+        random_seed: int,
         net=None,
         checkpoint_path=None,
         train_ratio: int = 0.8,
@@ -170,7 +185,8 @@ def evaluate_linear_model(
 
     full_dataset = WindTimeSeriesDataset(
         config["dir_source"], lag=lag,
-        forecast_horizon=forecast_horizon
+        forecast_horizon=forecast_horizon,
+        randomize=True, random_seed=random_seed
     )
     _, test_dataset = split_dataset(full_dataset, train_ratio)
 
@@ -197,6 +213,9 @@ def evaluate_linear_model(
 
     all_preds_conc = all_preds_conc.reshape(all_preds_conc.shape[0], -1)
     all_labels_conc = all_labels_conc.reshape(all_labels_conc.shape[0], -1)
+
+    logger.info(f"All pred labels conc:\n {all_preds_conc}")
+    logger.info(f"All true labels conc:\n {all_labels_conc}")
 
     mse = mean_squared_error(all_labels_conc, all_preds_conc)
     mae = mean_absolute_error(all_labels_conc, all_preds_conc)
@@ -244,7 +263,8 @@ def save_experiment_loss_plots(experiment_path: str, plot_save_path: str):
 
 
 def save_experiment_testing_results(
-        experiment_path: str, output_csv_path: str, train_ratio: int = 0.8
+        experiment_path: str, output_csv_path: str,
+        random_seed: int, train_ratio: int = 0.8
 ):
     analysis = ExperimentAnalysis(experiment_path)
     results = []
@@ -264,7 +284,8 @@ def save_experiment_testing_results(
             )
 
             metrics = evaluate_linear_model(
-                config, net=model, train_ratio=train_ratio
+                config, random_seed=random_seed,
+                net=model, train_ratio=train_ratio
             )
             metrics["trial_id"] = trial.trial_id
             metrics["config"] = config
@@ -274,72 +295,71 @@ def save_experiment_testing_results(
     df.to_csv(output_csv_path, index=False)
     logger.info(f"Experiment results saved to {output_csv_path}")
 
-"""
+
 search_space = {
     "model_class": tune.grid_search([Linear, NLinear]),
+    #"lag_forecast": tune.grid_search([
+    #    (3, 3), (6, 3), (9, 3),
+    #    (6, 6), (9, 6), (12, 6),
+    #    (9, 9), (12, 9),
+    #    (12, 12)
+    #]
+    #),
     "lag_forecast": tune.grid_search([
-        (3, 3), (6, 6), (9, 9),
-        (12, 12), (6, 3), (9, 3),
-        (9, 6), (12, 6), (12, 9)
+        (6, 3),
+        (9, 6),
+        (9, 9),
+        (12, 12)
     ]
     ),
-    "batch_size": tune.grid_search([16, 32, 64]),
-    "lr": tune.grid_search([0.001, 0.0005, 0.0001]),
+    #"batch_size": tune.grid_search([16, 32, 64]),
+    #"lr": tune.grid_search([0.001, 0.0005, 0.0001]),
+    "batch_size": tune.grid_search([16]),
+    "lr": tune.grid_search([0.001]),
     "dir_source": (
-        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+        "/home/marchostau/Downloads/"
         "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
     ),
     "optimizer": "adam",
-    "epochs": 100,
+    "epochs": 1,
     "shuffle": False,
-    "checkpoint_freq": 25,
-    "num_features": 2
-}
-"""
-search_space = {
-    "model_class": tune.grid_search([Linear]),
-    "lag_forecast": tune.grid_search([(9, 3), (9, 6)]),
-    "batch_size": tune.grid_search([16]),
-    "lr": tune.grid_search([0.001]),
-    #"dir_source": (
-    #    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
-    #    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
-    #),
-    "dir_source": (
-        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
-        "complete_datasets_csv_processed_5m_zstd(daily)_dbscan(daily)"
-    ),
-    "optimizer": "adam",
-    "epochs": 100,
-    "shuffle": False,
-    "checkpoint_freq": 25,
-    "num_features": 2
+    "checkpoint_freq": 20,
+    "num_features": 2,
+    "cap_data": True
 }
 
-"""
-storage_path = (
-    '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
-)
-tune.run(
-    train_linear_model, config=search_space, storage_path=storage_path
-)
-"""
+random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+random_seed_list = [0]
+for seed in random_seed_list:
+    logger.info(f"Started execution with seed: {seed}")
+    storage_path = (
+        '/home/marchostau/TFM_Marc/models/trained_models'
+    )
+    search_space["random_seed"] = seed
+    tune.run(
+        train_linear_model, config=search_space, storage_path=storage_path
+    )
 
+"""
 experiment_path = (
     '/home/marchostau/Desktop/TFM/Code/ProjectCode/'
-    'models/trained_models/train_linear_model_2025-03-25_12-24-17'
+    'models/trained_models/train_linear_model_2025-04-03_20-26-39'
 )
 
 plot_save_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/"
     "loss_plots/linear_models/WithPointsOutsidePortRemoval"
-    "[(9,3),(9,6)]_norm_daily"
+    "[(9,3)]_norm_daily"
 )
 
 results_save_path = (
     '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/'
-    'evaluate_results/linear_models/results[(9,3),(9,6)]_norm_daily.csv'
+    'evaluate_results/linear_models/results[(9,3)]_norm_daily.csv'
 )
 
+seed = 0
 save_experiment_loss_plots(experiment_path, plot_save_path)
-save_experiment_testing_results(experiment_path, results_save_path)
+save_experiment_testing_results(
+    experiment_path, results_save_path, random_seed=seed
+)
+"""

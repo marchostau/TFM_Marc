@@ -78,42 +78,6 @@ def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse'):
     return results_info
 
 
-def get_all_linear_results(dataframe: pd.DataFrame):
-    results_info = {}
-
-    for config, r2, mae, mse in zip(
-        dataframe['config'], dataframe['r2'],
-        dataframe['mae'], dataframe['mse']
-    ):
-        config = config.strip("{}")
-        config = [x.split(": ") for x in config.split(", '")]
-        config = [(x[0].replace("'", ''), x[1]) for x in config]
-        config = dict(config)
-
-        model_class = str(config["model_class"]).split(
-            '.'
-        )[-1].replace("'>", "")
-        batch_size = config["batch_size"]
-        lr = config["lr"]
-
-        lag_forecast = config["lag_forecast"].split(",")
-        lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
-        lag = lag_forecast[0]
-        forecast_horizon = lag_forecast[1]
-
-        results_info.setdefault(batch_size, {})
-        results_info[batch_size].setdefault(lr, {})
-        results_info[batch_size][lr].setdefault(forecast_horizon, {})
-        results_info[batch_size][lr][forecast_horizon].setdefault(lag, {})
-        results_info[batch_size][lr][forecast_horizon][lag][model_class] = {
-            "r2": r2,
-            "mae": mae,
-            "mse": mse
-        }
-
-    return results_info
-
-
 def plot_best_linear_results(
         dataframe: pd.DataFrame,
         base_dir_out: str,
@@ -188,13 +152,49 @@ def plot_best_linear_results(
         plt.clf()
 
 
-def plot_all_linear_results(
+def get_all_linear_results_separated(dataframe: pd.DataFrame):
+    results_info = {}
+
+    for config, r2, mae, mse in zip(
+        dataframe['config'], dataframe['r2'],
+        dataframe['mae'], dataframe['mse']
+    ):
+        config = config.strip("{}")
+        config = [x.split(": ") for x in config.split(", '")]
+        config = [(x[0].replace("'", ''), x[1]) for x in config]
+        config = dict(config)
+
+        model_class = str(config["model_class"]).split(
+            '.'
+        )[-1].replace("'>", "")
+        batch_size = config["batch_size"]
+        lr = config["lr"]
+
+        lag_forecast = config["lag_forecast"].split(",")
+        lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
+        lag = lag_forecast[0]
+        forecast_horizon = lag_forecast[1]
+
+        results_info.setdefault(batch_size, {})
+        results_info[batch_size].setdefault(lr, {})
+        results_info[batch_size][lr].setdefault(forecast_horizon, {})
+        results_info[batch_size][lr][forecast_horizon].setdefault(lag, {})
+        results_info[batch_size][lr][forecast_horizon][lag][model_class] = {
+            "r2": r2,
+            "mae": mae,
+            "mse": mse
+        }
+
+    return results_info
+
+
+def plot_all_linear_results_separated(
         dataframe: pd.DataFrame,
         base_dir_out: str,
         metrics_to_include: list = ["mse"],
         show_plot: bool = False
 ):
-    results_info = get_all_linear_results(dataframe)
+    results_info = get_all_linear_results_separated(dataframe)
 
     for batch_size, lr_data in results_info.items():
         for lr, forecast_data in lr_data.items():
@@ -237,6 +237,92 @@ def plot_all_linear_results(
                     plt.show()
                 
                 plt.clf()
+
+
+def get_all_linear_results_joined(dataframe: pd.DataFrame):
+    results_info = {}
+
+    for config, r2, mae, mse in zip(
+        dataframe['config'], dataframe['r2'],
+        dataframe['mae'], dataframe['mse']
+    ):
+        config = config.strip("{}")
+        config = [x.split(": ") for x in config.split(", '")]
+        config = [(x[0].replace("'", ''), x[1]) for x in config]
+        config = dict(config)
+
+        model_class = str(config["model_class"]).split(
+            '.'
+        )[-1].replace("'>", "")
+        batch_size = config["batch_size"]
+        lr = config["lr"]
+
+        lag_forecast = config["lag_forecast"].split(",")
+        lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
+        lag = lag_forecast[0]
+        forecast_horizon = lag_forecast[1]
+
+        results_info.setdefault(forecast_horizon, {})
+        results_info[forecast_horizon].setdefault(batch_size, {})
+        results_info[forecast_horizon][batch_size].setdefault(lr, {})
+        results_info[forecast_horizon][batch_size][lr].setdefault(lag, {})
+        results_info[forecast_horizon][batch_size][lr][lag][model_class] = {
+            "r2": r2,
+            "mae": mae,
+            "mse": mse
+        } 
+
+    return results_info
+
+
+def plot_all_linear_results_joined(
+        dataframe: pd.DataFrame,
+        base_dir_out: str,
+        metrics_to_include: list = ["mse"],
+        show_plot: bool = False
+):
+    results_info = get_all_linear_results_joined(dataframe)
+
+    for forecast_horizon, batch_data in results_info.items():
+        plt.figure(figsize=(14, 8))
+        for batch_size, lr_data in batch_data.items():
+            for lr, lag_data in lr_data.items():        
+                ordered_lag_data = dict(sorted(lag_data.items(), key=lambda item: int(item[0])))
+                lags = list(ordered_lag_data.keys())
+                
+                print(f"Forecast horizon: {forecast_horizon} | Lags: {lags}")
+
+                model_classes = list(next(iter(ordered_lag_data.values())).keys())
+
+                for model_class in sorted(model_classes):
+                    if "r2" in metrics_to_include:
+                        r2_values = [ordered_lag_data[lag][model_class]["r2"] for lag in lags]
+                        plt.plot(lags, r2_values, label=f"bs{batch_size}_lr{lr}_{model_class} - R2", linestyle=":", marker = 'o')
+
+                    if "mae" in metrics_to_include:
+                        mae_values = [ordered_lag_data[lag][model_class]["mae"] for lag in lags]
+                        plt.plot(lags, mae_values, label=f"bs{batch_size}_lr{lr}_{model_class} - MAE", linestyle="--", marker = 'o')
+
+                    if "mse" in metrics_to_include:
+                        mse_values = [ordered_lag_data[lag][model_class]["mse"] for lag in lags]
+                        print(f"MSE values (model_class {model_class} | forecast horizon {forecast_horizon} | bs {batch_size} | lr {lr}): {mse_values}")
+                        plt.plot(lags, mse_values, label=f"bs{batch_size}_lr{lr}_{model_class} - MSE", linestyle="-", marker = 'o')
+
+        plt.title(f"Forecast Horizon: {forecast_horizon}")
+        plt.xlabel("Lag")
+        plt.ylabel("Metrics")
+        plt.legend(title="Model Class and Metric")
+        plt.grid(True)
+        plt.tight_layout()
+
+        if not os.path.exists(base_dir_out):
+            os.makedirs(base_dir_out)
+
+        plt.savefig(f"{base_dir_out}/fh{forecast_horizon}_results.png")
+        if show_plot:
+            plt.show()
+        
+        plt.clf()
 
 
 def get_all_var_results(dataframe: pd.DataFrame):
@@ -378,6 +464,17 @@ def plot_linear_and_var_results(
         plt.clf()
 
 
+results_path = (
+    '/home/marchostau/Downloads/results_linear_models'
+    '[(3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)].csv'
+)
+
+df_linear = pd.read_csv(results_path)
+
+base_dir_out = '/home/marchostau/Desktop/testing_results/linear_models/all_results_joined'
+plot_all_linear_results_joined(df_linear, base_dir_out)
+
+
 """
 results_path = (
     '/home/marchostau/Desktop/TFM/Code/ProjectCode/'
@@ -388,7 +485,7 @@ results_path = (
 df_linear = pd.read_csv(results_path)
 
 base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/linear_models/all_results'
-plot_all_linear_results(df_linear, base_dir_out)
+plot_all_linear_results_separated(df_linear, base_dir_out)
 
 base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/linear_models/best_results'
 plot_best_linear_results(df_linear, base_dir_out)
