@@ -464,6 +464,7 @@ def plot_linear_and_var_results(
         plt.clf()
 
 
+"""
 results_path = (
     '/home/marchostau/Downloads/results_linear_models'
     '[(3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)].csv'
@@ -475,7 +476,7 @@ base_dir_out = '/home/marchostau/Desktop/testing_results/linear_models/all_resul
 plot_all_linear_results_joined(df_linear, base_dir_out)
 
 
-"""
+
 results_path = (
     '/home/marchostau/Desktop/TFM/Code/ProjectCode/'
     'models/evaluate_results/linear_models/results'
@@ -489,18 +490,22 @@ plot_all_linear_results_separated(df_linear, base_dir_out)
 
 base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/linear_models/best_results'
 plot_best_linear_results(df_linear, base_dir_out)
+"""
+
 
 
 results_path = (
-    '/home/marchostau/Desktop/TFM/Code/ProjectCode/'
-    'models/evaluate_results/var_model/results_VAR'
-    '[(3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)].csv'
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/var_model/diff_seeds_capped/"
+    "results_averaged.csv"
 )
 df_var = pd.read_csv(results_path)
 
-base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/var_model'
+base_dir_out = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/plots/testing_results/var_model/data_capped"
+)
 plot_all_var_results(df_var, base_dir_out)
 
-base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/linear_vs_var'
-plot_linear_and_var_results(df_linear, df_var, base_dir_out)
-"""
+#base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/linear_vs_var'
+#plot_linear_and_var_results(df_linear, df_var, base_dir_out)

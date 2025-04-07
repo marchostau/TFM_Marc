@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from ..data_processing.dataset_loader import WindTimeSeriesDataset
 from ..logging_information.logging_config import get_logger
-from .utils import split_dataset
+from .utils import split_dataset, average_results, custom_collate_fn
 
 logger = get_logger(__name__)
 
@@ -59,7 +59,8 @@ def evaluate_var_model(config, train_ratio: int = 0.8):
     test_loader = DataLoader(
         test_dataset,
         batch_size=config["batch_size"],
-        shuffle=config["shuffle"]
+        shuffle=config["shuffle"],
+        collate_fn=custom_collate_fn
     )
 
     model = VAR(train_data[["u_component", "v_component"]])
@@ -124,29 +125,40 @@ search_space = {
         (9, 9), (12, 9),
         (12, 12)
     ],
-    #"train_test_seqs": [
-    #    (8275, 2069), (8275, 2069), (8275, 2069),
-    #    (5936, 1485), (5936, 1485), (5936, 1485),
-    #    (4885, 1222), (4885, 1222),
-    #    (3924, 982)
-    #],
+    "train_test_seqs": [
+        (8275, 2069), (8275, 2069), (8275, 2069),
+        (5936, 1485), (5936, 1485), (5936, 1485),
+        (4885, 1222), (4885, 1222),
+        (3924, 982)
+    ],
     "batch_size": 16,
     "dir_source": (
-        "/home/marchostau/Downloads/"
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
         "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
     ),
     "num_features": 2,
     "shuffle": False
 }
 
-
+"""
 random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 for seed in random_seed_list:
     search_space["random_seed"] = seed
     results_save_path = (
-        "/home/marchostau/Downloads/VAR/results_VAR[(3,3),(6,6),(9,9),(12,12),"
-        f"(6,3),(9,3),(9,6),(12,6),(12,9)]_seed{seed}.csv"
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+        "evaluate_results/var_model/diff_seeds_capped/results_VAR[(3,3),"
+        f"(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed{seed}.csv"
     )
-    save_testing_results(search_space, results_save_path)
-    #save_testing_results_capped(search_space, results_save_path)
+    #save_testing_results(search_space, results_save_path)
+    save_testing_results_capped(search_space, results_save_path)
 
+"""
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/var_model/diff_seeds_capped"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/var_model/diff_seeds_capped/results_averaged.csv"
+)
+average_results(results_dir, output_csv_path)

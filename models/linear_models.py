@@ -8,14 +8,14 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from ray import tune
-from ray.train import Checkpoint
+from ray.train import Checkpoint, get_checkpoint
 from ray.tune import ExperimentAnalysis
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 from ..data_processing.dataset_loader import WindTimeSeriesDataset
 from ..logging_information.logging_config import get_logger
-from .utils import split_dataset
+from .utils import split_dataset, custom_collate_fn
 
 logger = get_logger(__name__)
 
@@ -57,7 +57,7 @@ def train_linear_model(config, train_ratio: int = 0.8):
     output_size = forecast_horizon
     model_class = config["model_class"]
 
-    #train_num_seq = config.get("train_num_seq")
+    train_num_seq = config.get("train_num_seq")
     cap_data = config.get("cap_data", False)
     if cap_data:
         if forecast_horizon == 3:
@@ -85,19 +85,18 @@ def train_linear_model(config, train_ratio: int = 0.8):
     criterion = nn.MSELoss()
 
     start_epoch = 0
-    """
-    checkpoint = train.get_checkpoint()
+    checkpoint = get_checkpoint()
     if checkpoint:
         with checkpoint.as_directory() as checkpoint_dir:
-            checkpoint = torch.load(os.path.join(checkpoint_dir, "model.ckpt"))
-            net.load_state_dict(checkpoint["model_state_dict"])
-            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            start_epoch = checkpoint["epoch"] + 1
+            checkpoint_data = torch.load(os.path.join(checkpoint_dir, "model.ckpt"))
+            net.load_state_dict(checkpoint_data["model_state_dict"])
+            optimizer.load_state_dict(checkpoint_data["optimizer_state_dict"])
+            start_epoch = checkpoint_data["epoch"] + 1
             logger.info(
                 f"Resumed training from checkpoint: {checkpoint_dir}, "
                 f"starting at epoch {start_epoch}"
             )
-    """
+
     full_dataset = WindTimeSeriesDataset(
         config["dir_source"], lag=lag,
         forecast_horizon=forecast_horizon,
@@ -112,16 +111,17 @@ def train_linear_model(config, train_ratio: int = 0.8):
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
-        shuffle=config["shuffle"]
+        shuffle=config["shuffle"],
+        collate_fn=custom_collate_fn
     )
 
     logger.info("Starting training...")
     net.train()
     for epoch in range(start_epoch, config["epochs"]):
         epoch_loss = 0.0
-        for inputs, true_labels in train_loader:
-            inputs = inputs.to(device)
-            true_labels = true_labels.to(device)
+        for batch in train_loader:
+            inputs = batch["X"].to(device)
+            true_labels = batch["y"].to(device)
 
             optimizer.zero_grad()
             pred_labels = net(inputs)
@@ -193,29 +193,87 @@ def evaluate_linear_model(
     test_loader = DataLoader(
         test_dataset,
         batch_size=config["batch_size"],
-        shuffle=config["shuffle"]
+        shuffle=config["shuffle"],
+        collate_fn=custom_collate_fn
     )
 
     net.eval()
     all_preds, all_labels = [], []
+    all_metadata = []
 
     with torch.no_grad():
-        for inputs, true_labels in test_loader:
-            inputs, true_labels = inputs.to(device), true_labels.to(device)
+        for batch in test_loader:
+            inputs, true_labels = batch["X"].to(device), batch["y"].to(device)
+
+            true_metadata = batch["target_metadata"]
+            logger.info(f"True metadata:\n{true_metadata}")
+            logger.info(f"Shape true metadata: {len(true_metadata)}")
+
+            metadata_tensor = np.stack(true_metadata, axis=0)
+            logger.info(f"Metadata tensor\n{metadata_tensor}")
+
+            all_metadata.append(metadata_tensor)
 
             pred_labels = net(inputs)
+
+            logger.info(f"True labels:\n {true_labels}")
+            logger.info(f"Inputs:\n{inputs}")
+            logger.info(f"Preds:\n{pred_labels}")
+
+            logger.info(f"Len true metadata: {len(true_metadata)}")
+            logger.info(f"Shape metadata tensor: {metadata_tensor.shape}")
+            logger.info(f"Shape true labels: {true_labels.shape}")
+            logger.info(f"Shape input labels: {inputs.shape}")
+            logger.info(f"Shape pred labels: {pred_labels.shape}")
 
             all_preds.append(pred_labels.cpu().numpy())
             all_labels.append(true_labels.cpu().numpy())
 
     all_preds_conc = np.concatenate(all_preds, axis=0)
     all_labels_conc = np.concatenate(all_labels, axis=0)
+    all_metadata_conc = np.concatenate(all_metadata, axis=0)
+
+    logger.info(f"All pred labels before conc:\n {all_preds_conc}")
+    logger.info(all_preds_conc.shape)
+    logger.info(f"All true labels before conc:\n {all_labels_conc}")
+    logger.info(all_labels_conc.shape)
+    logger.info(f"All metadata: {all_metadata_conc}")
+    logger.info(all_metadata_conc.shape)
+
+    n_samples, n_steps, _ = all_labels_conc.shape
+    flat_labels = all_labels_conc.reshape(-1, 2)
+    flat_preds = all_preds_conc.reshape(-1, 2)
+    flat_metadata = all_metadata_conc.reshape(-1, 6)
+
+    # Create the DataFrame
+    df = pd.DataFrame({
+        "true_u_component": flat_labels[:, 0],
+        "true_v_component": flat_labels[:, 1],
+        "pred_u_component": flat_preds[:, 0],
+        "pred_v_component": flat_preds[:, 1],
+        "timestamp": flat_metadata[:, 0],
+        "latitude": flat_metadata[:, 1],
+        "longitude": flat_metadata[:, 2],
+        "wind_speed": flat_metadata[:, 3],
+        "wind_direction": flat_metadata[:, 4],
+        "file_name": flat_metadata[:, 5],
+    })
+
+    # Optionally convert timestamp if it's a string
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df.to_csv("EXAMPLE.csv")
+
+    print(df.head())
+
+
 
     all_preds_conc = all_preds_conc.reshape(all_preds_conc.shape[0], -1)
     all_labels_conc = all_labels_conc.reshape(all_labels_conc.shape[0], -1)
 
     logger.info(f"All pred labels conc:\n {all_preds_conc}")
+    logger.info(all_preds_conc.shape)
     logger.info(f"All true labels conc:\n {all_labels_conc}")
+    logger.info(all_labels_conc.shape)
 
     mse = mean_squared_error(all_labels_conc, all_preds_conc)
     mae = mean_absolute_error(all_labels_conc, all_preds_conc)
@@ -296,49 +354,70 @@ def save_experiment_testing_results(
     logger.info(f"Experiment results saved to {output_csv_path}")
 
 
+"""
 search_space = {
     "model_class": tune.grid_search([Linear, NLinear]),
-    #"lag_forecast": tune.grid_search([
-    #    (3, 3), (6, 3), (9, 3),
-    #    (6, 6), (9, 6), (12, 6),
-    #    (9, 9), (12, 9),
-    #    (12, 12)
-    #]
-    #),
     "lag_forecast": tune.grid_search([
-        (6, 3),
-        (9, 6),
-        (9, 9),
+        (3, 3), (6, 3), (9, 3),
+        (6, 6), (9, 6), (12, 6),
+        (9, 9), (12, 9),
         (12, 12)
     ]
     ),
-    #"batch_size": tune.grid_search([16, 32, 64]),
-    #"lr": tune.grid_search([0.001, 0.0005, 0.0001]),
-    "batch_size": tune.grid_search([16]),
-    "lr": tune.grid_search([0.001]),
+    # "lag_forecast": tune.grid_search([
+    #    (6, 3),
+    #    (9, 6),
+    #    (9, 9),
+    #    (12, 12)
+    # ]
+    # ),
+    "batch_size": tune.grid_search([16, 32, 64]),
+    "lr": tune.grid_search([0.001, 0.0005, 0.0001]),
+    # "batch_size": tune.grid_search([16]),
+    # "lr": tune.grid_search([0.001]),
     "dir_source": (
-        "/home/marchostau/Downloads/"
-        "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+        "/home/marchostau/Desktop/TFM/Code/"
+        "ProjectCode/models/evaluate_results/linear_models"
     ),
     "optimizer": "adam",
     "epochs": 1,
     "shuffle": False,
     "checkpoint_freq": 20,
     "num_features": 2,
-    "cap_data": True
+    "cap_data": False
+    #"cap_data": True
 }
 
+
+storage_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/trained_models"
+)
+search_space["random_seed"] = 4
+tune.run(
+    train_linear_model,
+    config=search_space,
+    storage_path=storage_path,
+    name="train_linear_model_2025-04-05_04-13-25",  # <- Match the interrupted run folder name
+    resume="AUTO"  # Let Ray automatically detect and resume
+)
+"""
+
+"""
 random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-random_seed_list = [0]
+random_seed_list = [4]
 for seed in random_seed_list:
     logger.info(f"Started execution with seed: {seed}")
     storage_path = (
-        '/home/marchostau/TFM_Marc/models/trained_models'
+        '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
     )
     search_space["random_seed"] = seed
     tune.run(
         train_linear_model, config=search_space, storage_path=storage_path
     )
+
+"""
+
 
 """
 experiment_path = (
@@ -358,8 +437,57 @@ results_save_path = (
 )
 
 seed = 0
-save_experiment_loss_plots(experiment_path, plot_save_path)
+for seed in seed_list:
+    save_experiment_loss_plots(experiment_path, plot_save_path)
+    save_experiment_testing_results(
+        experiment_path, results_save_path, random_seed=seed
+    )
+"""
+
+
+
+
+"""
+search_space = {
+    "model_class": tune.grid_search([Linear]),
+    "lag_forecast": tune.grid_search([
+        (6, 3),
+    ]
+    ),
+    "batch_size": tune.grid_search([16]),
+    "lr": tune.grid_search([0.001]),
+    "dir_source": (
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+        "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+    ),
+    "optimizer": "adam",
+    "epochs": 5,
+    "shuffle": False,
+    "checkpoint_freq": 20,
+    "num_features": 2,
+    "cap_data": False
+}
+storage_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/trained_models"
+)
+search_space["random_seed"] = 0
+tune.run(
+    train_linear_model, config=search_space, storage_path=storage_path
+)
+"""
+
+experiment_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "trained_models/train_linear_model_2025-04-07_16-32-09"
+)
+
+results_save_path = (
+    '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/'
+    'evaluate_results/linear_models/results[(6,3)]_test.csv'
+)
+
+seed = 0
 save_experiment_testing_results(
     experiment_path, results_save_path, random_seed=seed
 )
-"""
