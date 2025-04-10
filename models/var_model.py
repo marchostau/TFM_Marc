@@ -159,6 +159,7 @@ results_dir = (
 )
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/evaluate_results/var_model/diff_seeds_capped/results_averaged.csv"
+    "models/evaluate_results/var_model/diff_seeds_capped/"
+    "results_averaged.csv"
 )
 average_results(results_dir, output_csv_path)

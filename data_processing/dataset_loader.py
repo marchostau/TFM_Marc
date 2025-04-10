@@ -103,6 +103,7 @@ class WindTimeSeriesDataset(Dataset):
     def __getitem__(self, idx):
         file_idx, seq_start = self.data_indices[idx]
         file_path = self.file_list[file_idx]
+        file_name = os.path.basename(file_path)
 
         df = pd.read_csv(
             file_path, parse_dates=["timestamp"], dtype={"file_name": str}
@@ -112,39 +113,50 @@ class WindTimeSeriesDataset(Dataset):
         feature_data = df[["u_component", "v_component"]].values
 
         if self.forecast_horizon == 1:
-            X = feature_data[seq_start: seq_start + self.lag]  # Input sequence
-            y = feature_data[seq_start + self.lag]  # Target
-            target_metadata = df[
-                [
-                    'timestamp', 'latitude', 'longitude',
-                    'wind_speed', 'wind_direction',
-                    'file_name'
-                ]
-            ].iloc[seq_start + self.lag]
-        else:
-            X = feature_data[seq_start: seq_start + self.lag]  # Input sequence
-            y = feature_data[seq_start + self.lag:
-                             seq_start + self.lag +
-                             self.forecast_horizon]  # Target
-            target_metadata = df[
-                [
-                    'timestamp', 'latitude', 'longitude',
-                    'wind_speed', 'wind_direction',
-                    'file_name'
-                ]
-            ].iloc[
-                seq_start + self.lag: seq_start + self.lag + self.forecast_horizon
-            ].values
+            X = feature_data[seq_start: seq_start + self.lag]
+            y = feature_data[seq_start + self.lag]
 
-        input_metadata = df[
+            target_metadata_df = df[
+                [
+                    'timestamp', 'latitude', 'longitude',
+                    'wind_speed', 'wind_direction',
+                    'file_name'
+                ]
+            ].iloc[seq_start + self.lag].copy()
+
+            target_metadata_df['file_name'] = file_name
+            target_metadata = target_metadata_df
+        else:
+            X = feature_data[seq_start: seq_start + self.lag]
+            y = feature_data[
+                seq_start + self.lag:
+                seq_start + self.lag + self.forecast_horizon
+            ]
+
+            target_metadata_df = df[
                 [
                     'timestamp', 'latitude', 'longitude',
                     'wind_speed', 'wind_direction',
                     'file_name'
                 ]
             ].iloc[
-                seq_start: seq_start + self.lag
-            ].values
+                seq_start + self.lag:
+                seq_start + self.lag + self.forecast_horizon
+            ].copy()
+
+            target_metadata_df['file_name'] = file_name
+            target_metadata = target_metadata_df.values
+
+        input_metadata_df = df[
+            [
+                'timestamp', 'latitude', 'longitude',
+                'wind_speed', 'wind_direction',
+                'file_name'
+            ]
+        ].iloc[seq_start: seq_start + self.lag].copy()
+
+        input_metadata_df['file_name'] = file_name
+        input_metadata = input_metadata_df.values
 
         return {
             "X": torch.tensor(X, dtype=torch.float32),
@@ -152,42 +164,3 @@ class WindTimeSeriesDataset(Dataset):
             "input_metadata": input_metadata,
             "target_metadata": target_metadata
         }
-
-"""
-def __getitem__(self, idx):
-    file_idx, seq_start = self.data_indices[idx]
-    file_path = self.file_list[file_idx]
-
-    df = pd.read_csv(
-        file_path, parse_dates=["timestamp"], dtype={"file_name": str}
-    )
-    df.sort_values(by=["timestamp"], inplace=True)
-
-    feature_data = df.select_dtypes(include=['number']).values
-
-    if self.forecast_horizon == 1:
-        X = feature_data[seq_start: seq_start + self.lag]
-        y = feature_data[seq_start + self.lag]
-        target_timestamps = df['timestamp'].iloc[seq_start + self.lag]
-    else:
-        X = feature_data[seq_start: seq_start + self.lag]
-        y = feature_data[seq_start + self.lag:
-                         seq_start + self.lag + self.forecast_horizon]
-        target_timestamps = df['timestamp'].iloc[
-            seq_start + self.lag: seq_start + self.lag + self.forecast_horizon
-        ].values
-
-    # You can extract whatever metadata you want here
-    input_timestamps = df['timestamp'].iloc[seq_start: seq_start + self.lag].values
-    file_name = os.path.basename(file_path)
-
-    return {
-        "X": torch.tensor(X, dtype=torch.float32),
-        "y": torch.tensor(y, dtype=torch.float32),
-        "input_timestamps": input_timestamps,
-        "target_timestamps": target_timestamps,
-        "file_name": file_name,
-        "file_idx": file_idx,
-        "seq_start": seq_start,
-    }
-"""

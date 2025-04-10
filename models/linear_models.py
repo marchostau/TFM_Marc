@@ -15,7 +15,15 @@ from torch.utils.data import DataLoader
 
 from ..data_processing.dataset_loader import WindTimeSeriesDataset
 from ..logging_information.logging_config import get_logger
-from .utils import split_dataset, custom_collate_fn
+from .utils import (
+    split_dataset,
+    custom_collate_fn,
+    postprocess_data,
+    average_results,
+    get_best_results,
+    obtain_pred_vs_trues_best_models,
+    concatenate_all_seeds_results
+)
 
 logger = get_logger(__name__)
 
@@ -67,7 +75,7 @@ def train_linear_model(config, train_ratio: int = 0.8):
         elif forecast_horizon == 9:
             train_num_seq = 4885
         elif forecast_horizon == 12:
-            train_num_seq = 3924 
+            train_num_seq = 3924
 
     net = model_class(input_size=input_size, output_size=output_size)
 
@@ -156,6 +164,7 @@ def train_linear_model(config, train_ratio: int = 0.8):
 def evaluate_linear_model(
         config,
         random_seed: int,
+        output_dir: str,
         net=None,
         checkpoint_path=None,
         train_ratio: int = 0.8,
@@ -166,6 +175,10 @@ def evaluate_linear_model(
     lag, forecast_horizon = config["lag_forecast"]
     input_size = lag
     output_size = forecast_horizon
+    model_name = str(config["model_class"]).split(
+        '.'
+    )[-1].replace("'>", "")
+
     if net is None:
         model_class = config["model_class"]
         net = model_class(input_size=input_size, output_size=output_size)
@@ -206,25 +219,12 @@ def evaluate_linear_model(
             inputs, true_labels = batch["X"].to(device), batch["y"].to(device)
 
             true_metadata = batch["target_metadata"]
-            logger.info(f"True metadata:\n{true_metadata}")
-            logger.info(f"Shape true metadata: {len(true_metadata)}")
 
             metadata_tensor = np.stack(true_metadata, axis=0)
-            logger.info(f"Metadata tensor\n{metadata_tensor}")
 
             all_metadata.append(metadata_tensor)
 
             pred_labels = net(inputs)
-
-            logger.info(f"True labels:\n {true_labels}")
-            logger.info(f"Inputs:\n{inputs}")
-            logger.info(f"Preds:\n{pred_labels}")
-
-            logger.info(f"Len true metadata: {len(true_metadata)}")
-            logger.info(f"Shape metadata tensor: {metadata_tensor.shape}")
-            logger.info(f"Shape true labels: {true_labels.shape}")
-            logger.info(f"Shape input labels: {inputs.shape}")
-            logger.info(f"Shape pred labels: {pred_labels.shape}")
 
             all_preds.append(pred_labels.cpu().numpy())
             all_labels.append(true_labels.cpu().numpy())
@@ -233,19 +233,10 @@ def evaluate_linear_model(
     all_labels_conc = np.concatenate(all_labels, axis=0)
     all_metadata_conc = np.concatenate(all_metadata, axis=0)
 
-    logger.info(f"All pred labels before conc:\n {all_preds_conc}")
-    logger.info(all_preds_conc.shape)
-    logger.info(f"All true labels before conc:\n {all_labels_conc}")
-    logger.info(all_labels_conc.shape)
-    logger.info(f"All metadata: {all_metadata_conc}")
-    logger.info(all_metadata_conc.shape)
-
-    n_samples, n_steps, _ = all_labels_conc.shape
     flat_labels = all_labels_conc.reshape(-1, 2)
     flat_preds = all_preds_conc.reshape(-1, 2)
     flat_metadata = all_metadata_conc.reshape(-1, 6)
 
-    # Create the DataFrame
     df = pd.DataFrame({
         "true_u_component": flat_labels[:, 0],
         "true_v_component": flat_labels[:, 1],
@@ -259,21 +250,26 @@ def evaluate_linear_model(
         "file_name": flat_metadata[:, 5],
     })
 
-    # Optionally convert timestamp if it's a string
+    batch_size = config["batch_size"]
+    lr = config["lr"]
+    output_path = os.path.join(
+        output_dir, f"model_{model_name}"
+    )
+    output_path = os.path.join(
+        output_path, f"lag{lag}_fh{forecast_horizon}"
+    )
+    output_path = os.path.join(
+        output_path, f"batch_size{batch_size}_lr{lr}"
+    )
+    os.makedirs(output_path, exist_ok=True)
+    output_path = os.path.join(output_path, "trues_pred_results.csv")
     df["timestamp"] = pd.to_datetime(df["timestamp"])
-    df.to_csv("EXAMPLE.csv")
+    df.to_csv(output_path, index=False)
 
     print(df.head())
 
-
-
     all_preds_conc = all_preds_conc.reshape(all_preds_conc.shape[0], -1)
     all_labels_conc = all_labels_conc.reshape(all_labels_conc.shape[0], -1)
-
-    logger.info(f"All pred labels conc:\n {all_preds_conc}")
-    logger.info(all_preds_conc.shape)
-    logger.info(f"All true labels conc:\n {all_labels_conc}")
-    logger.info(all_labels_conc.shape)
 
     mse = mean_squared_error(all_labels_conc, all_preds_conc)
     mae = mean_absolute_error(all_labels_conc, all_preds_conc)
@@ -315,13 +311,14 @@ def save_experiment_loss_plots(experiment_path: str, plot_save_path: str):
             f"_horizon{forecast}_lr{learning_rate}.png"
         )
 
+        os.makedirs(plot_save_path, exist_ok=True)
         plot_filepath = os.path.join(plot_save_path, plot_filename)
         plt.savefig(plot_filepath, dpi=300)
         plt.close()
 
 
 def save_experiment_testing_results(
-        experiment_path: str, output_csv_path: str,
+        experiment_path: str, output_dir: str,
         random_seed: int, train_ratio: int = 0.8
 ):
     analysis = ExperimentAnalysis(experiment_path)
@@ -343,18 +340,21 @@ def save_experiment_testing_results(
 
             metrics = evaluate_linear_model(
                 config, random_seed=random_seed,
+                output_dir=output_dir,
                 net=model, train_ratio=train_ratio
             )
             metrics["trial_id"] = trial.trial_id
             metrics["config"] = config
             results.append(metrics)
 
+    file_name = f"testing_results_seed{random_seed}.csv"
+    output_path = os.path.join(output_dir, file_name)
     df = pd.DataFrame(results)
-    df.to_csv(output_csv_path, index=False)
-    logger.info(f"Experiment results saved to {output_csv_path}")
+    df.to_csv(output_path, index=False)
+    logger.info(f"Experiment results saved to {output_dir}")
 
 
-"""
+
 search_space = {
     "model_class": tune.grid_search([Linear, NLinear]),
     "lag_forecast": tune.grid_search([
@@ -364,48 +364,24 @@ search_space = {
         (12, 12)
     ]
     ),
-    # "lag_forecast": tune.grid_search([
-    #    (6, 3),
-    #    (9, 6),
-    #    (9, 9),
-    #    (12, 12)
-    # ]
-    # ),
     "batch_size": tune.grid_search([16, 32, 64]),
     "lr": tune.grid_search([0.001, 0.0005, 0.0001]),
-    # "batch_size": tune.grid_search([16]),
-    # "lr": tune.grid_search([0.001]),
     "dir_source": (
-        "/home/marchostau/Desktop/TFM/Code/"
-        "ProjectCode/models/evaluate_results/linear_models"
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+        "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
     ),
     "optimizer": "adam",
-    "epochs": 1,
+    "epochs": 70,
     "shuffle": False,
     "checkpoint_freq": 20,
     "num_features": 2,
-    "cap_data": False
-    #"cap_data": True
+    #"cap_data": False
+    "cap_data": True
 }
 
-
-storage_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/trained_models"
-)
-search_space["random_seed"] = 4
-tune.run(
-    train_linear_model,
-    config=search_space,
-    storage_path=storage_path,
-    name="train_linear_model_2025-04-05_04-13-25",  # <- Match the interrupted run folder name
-    resume="AUTO"  # Let Ray automatically detect and resume
-)
 """
-
-"""
-random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-random_seed_list = [4]
+# random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+random_seed_list = [0]
 for seed in random_seed_list:
     logger.info(f"Started execution with seed: {seed}")
     storage_path = (
@@ -418,76 +394,142 @@ for seed in random_seed_list:
 
 """
 
-
 """
-experiment_path = (
-    '/home/marchostau/Desktop/TFM/Code/ProjectCode/'
-    'models/trained_models/train_linear_model_2025-04-03_20-26-39'
-)
+base_dir = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
+experiment_path_list = [
+    f'{base_dir}/seed0_train_linear_model_2025-04-03_20-51-26',
+    f'{base_dir}/seed1_train_linear_model_2025-04-04_04-45-24',
+    f'{base_dir}/seed2_train_linear_model_2025-04-04_12-19-08',
+    f'{base_dir}/seed3_train_linear_model_2025-04-04_20-16-38',
+    f'{base_dir}/seed4_train_linear_model_2025-04-07_20-34-38',
+    f'{base_dir}/seed5_train_linear_model_2025-04-05_11-50-43',
+    f'{base_dir}/seed6_train_linear_model_2025-04-05_19-24-34',
+    f'{base_dir}/seed7_train_linear_model_2025-04-06_02-51-19',
+    f'{base_dir}/seed8_train_linear_model_2025-04-06_10-07-40',
+    f'{base_dir}/seed9_train_linear_model_2025-04-06_17-29-24',
+]
+random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-plot_save_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/"
-    "loss_plots/linear_models/WithPointsOutsidePortRemoval"
-    "[(9,3)]_norm_daily"
-)
+experiment_path_list = [
+    f"{base_dir}/capped_data_seed0_train_linear_model_2025-04-09_23-08-28"
+]
+random_seed_list = [0]
 
-results_save_path = (
-    '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/'
-    'evaluate_results/linear_models/results[(9,3)]_norm_daily.csv'
-)
+for seed, experiment_path in zip(random_seed_list, experiment_path_list):
+    search_space["random_seed"] = seed
 
-seed = 0
-for seed in seed_list:
+    plot_save_path = (
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/"
+        "loss_plots/linear_models/[(3,3),(6,6),(9,9),(12,12)"
+        ",(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/"
+        f"seed{seed}"
+    )
+
+    results_save_dir = (
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+        "evaluate_results/linear_models/results[((3,3),(6,6),"
+        "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+        f"/seed{seed}"
+    )
+
     save_experiment_loss_plots(experiment_path, plot_save_path)
     save_experiment_testing_results(
-        experiment_path, results_save_path, random_seed=seed
+        experiment_path, results_save_dir, random_seed=seed
     )
 """
 
-
-
-
 """
-search_space = {
-    "model_class": tune.grid_search([Linear]),
-    "lag_forecast": tune.grid_search([
-        (6, 3),
-    ]
-    ),
-    "batch_size": tune.grid_search([16]),
-    "lr": tune.grid_search([0.001]),
-    "dir_source": (
-        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
-        "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
-    ),
-    "optimizer": "adam",
-    "epochs": 5,
-    "shuffle": False,
-    "checkpoint_freq": 20,
-    "num_features": 2,
-    "cap_data": False
-}
-storage_path = (
+results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/trained_models"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_diff_seeds/AllResults"
 )
-search_space["random_seed"] = 0
-tune.run(
-    train_linear_model, config=search_space, storage_path=storage_path
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/seed0"
 )
+
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_diff_seeds/AllResults/best_results.csv"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/best_results.csv"
+)
+#average_results(results_dir, output_csv_path)
+get_best_results(results_dir, output_csv_path)
 """
 
-experiment_path = (
+
+best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "trained_models/train_linear_model_2025-04-07_16-32-09"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_diff_seeds/BestResults/best_results.csv"
+)
+best_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/BestResults/best_results.csv"
+)
+base_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_diff_seeds"
+)
+base_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/"
+)
+dir_original_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv"
+)
+base_dir_output = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_diff_seeds/BestResults/"
+)
+base_dir_output = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/BestResults/"
+)
+obtain_pred_vs_trues_best_models(
+    best_results_path,
+    base_results_path,
+    dir_original_source,
+    base_dir_output
 )
 
-results_save_path = (
-    '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/'
-    'evaluate_results/linear_models/results[(6,3)]_test.csv'
-)
 
-seed = 0
-save_experiment_testing_results(
-    experiment_path, results_save_path, random_seed=seed
+"""
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_diff_seeds/AllResults"
 )
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_diff_seeds/AllResults/"
+    "concatenated_seed_results.csv"
+)
+concatenate_all_seeds_results(results_dir, output_csv_path)
+"""

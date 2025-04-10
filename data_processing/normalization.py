@@ -29,6 +29,30 @@ def z_standardization(
     return dataframe
 
 
+def reverse_z_standardization(
+        dataframe: pd.DataFrame,
+        denorm_cols: dict,
+        mean: pd.Series,
+        std: pd.Series
+):
+    logger.info(
+        f"Reversing Z-Standardization for columns: {denorm_cols} with "
+        f"Mean: {mean.to_dict()}, Std Dev: {std.to_dict()}"
+    )
+
+    for new_col, original_col in denorm_cols.items():
+        logger.debug(
+            f"Reversing column: {new_col} using "
+            f"original: {original_col}"
+        )
+        dataframe[new_col] = (
+            dataframe[new_col] * std[original_col] +
+            mean[original_col]
+        )
+
+    return dataframe
+
+
 def normalize_dataset(
         dataframe: pd.DataFrame,
         mode: NormalizationMode,

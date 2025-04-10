@@ -15,14 +15,18 @@ def get_config(row):
 
 def get_lag(row):
     config = get_config(row)
-    lag_forecast = config["lag_forecast"].split(",")
+    lag_fh = config['lag_forecast']
+    lag_fh = lag_fh.replace("'", "")
+    lag_forecast = lag_fh.split(",")
     lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
     return lag_forecast[0]
 
 
 def get_forecast_horizon(row):
     config = get_config(row)
-    lag_forecast = config["lag_forecast"].split(",")
+    lag_fh = config['lag_forecast']
+    lag_fh = lag_fh.replace("'", "")
+    lag_forecast = lag_fh.split(",")
     lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
     return lag_forecast[1]
 
@@ -170,7 +174,9 @@ def get_all_linear_results_separated(dataframe: pd.DataFrame):
         batch_size = config["batch_size"]
         lr = config["lr"]
 
-        lag_forecast = config["lag_forecast"].split(",")
+        lag_fh = config['lag_forecast']
+        lag_fh = lag_fh.replace("'", "")
+        lag_forecast = lag_fh.split(",")
         lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
         lag = lag_forecast[0]
         forecast_horizon = lag_forecast[1]
@@ -235,7 +241,7 @@ def plot_all_linear_results_separated(
                 plt.savefig(f"{out_path}/fh{forecast_horizon}_results.png")
                 if show_plot:
                     plt.show()
-                
+
                 plt.clf()
 
 
@@ -257,7 +263,9 @@ def get_all_linear_results_joined(dataframe: pd.DataFrame):
         batch_size = config["batch_size"]
         lr = config["lr"]
 
-        lag_forecast = config["lag_forecast"].split(",")
+        lag_fh = config['lag_forecast']
+        lag_fh = lag_fh.replace("'", "")
+        lag_forecast = lag_fh.split(",")
         lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
         lag = lag_forecast[0]
         forecast_horizon = lag_forecast[1]
@@ -270,7 +278,7 @@ def get_all_linear_results_joined(dataframe: pd.DataFrame):
             "r2": r2,
             "mae": mae,
             "mse": mse
-        } 
+        }
 
     return results_info
 
@@ -286,11 +294,9 @@ def plot_all_linear_results_joined(
     for forecast_horizon, batch_data in results_info.items():
         plt.figure(figsize=(14, 8))
         for batch_size, lr_data in batch_data.items():
-            for lr, lag_data in lr_data.items():        
+            for lr, lag_data in lr_data.items():
                 ordered_lag_data = dict(sorted(lag_data.items(), key=lambda item: int(item[0])))
                 lags = list(ordered_lag_data.keys())
-                
-                print(f"Forecast horizon: {forecast_horizon} | Lags: {lags}")
 
                 model_classes = list(next(iter(ordered_lag_data.values())).keys())
 
@@ -305,7 +311,6 @@ def plot_all_linear_results_joined(
 
                     if "mse" in metrics_to_include:
                         mse_values = [ordered_lag_data[lag][model_class]["mse"] for lag in lags]
-                        print(f"MSE values (model_class {model_class} | forecast horizon {forecast_horizon} | bs {batch_size} | lr {lr}): {mse_values}")
                         plt.plot(lags, mse_values, label=f"bs{batch_size}_lr{lr}_{model_class} - MSE", linestyle="-", marker = 'o')
 
         plt.title(f"Forecast Horizon: {forecast_horizon}")
@@ -464,36 +469,22 @@ def plot_linear_and_var_results(
         plt.clf()
 
 
-"""
-results_path = (
-    '/home/marchostau/Downloads/results_linear_models'
-    '[(3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)].csv'
+base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
+results_suffix = (
+    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
 )
 
+results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
+results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/testing_results_seed0.csv"
 df_linear = pd.read_csv(results_path)
 
-base_dir_out = '/home/marchostau/Desktop/testing_results/linear_models/all_results_joined'
-plot_all_linear_results_joined(df_linear, base_dir_out)
+plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
 
+plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
+plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
+plot_best_linear_results(df_linear, f"{plot_base}/best_results")
 
-
-results_path = (
-    '/home/marchostau/Desktop/TFM/Code/ProjectCode/'
-    'models/evaluate_results/linear_models/results'
-    '[(3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)].csv'
-)
-
-df_linear = pd.read_csv(results_path)
-
-base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/linear_models/all_results'
-plot_all_linear_results_separated(df_linear, base_dir_out)
-
-base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/linear_models/best_results'
-plot_best_linear_results(df_linear, base_dir_out)
 """
-
-
-
 results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/diff_seeds_capped/"
@@ -509,3 +500,4 @@ plot_all_var_results(df_var, base_dir_out)
 
 #base_dir_out = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/plots/testing_results/linear_vs_var'
 #plot_linear_and_var_results(df_linear, df_var, base_dir_out)
+"""
