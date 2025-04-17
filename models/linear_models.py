@@ -213,7 +213,6 @@ def evaluate_linear_model(
     net.eval()
     all_preds, all_labels = [], []
     all_metadata = []
-
     with torch.no_grad():
         for batch in test_loader:
             inputs, true_labels = batch["X"].to(device), batch["y"].to(device)
@@ -265,8 +264,6 @@ def evaluate_linear_model(
     output_path = os.path.join(output_path, "trues_pred_results.csv")
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df.to_csv(output_path, index=False)
-
-    print(df.head())
 
     all_preds_conc = all_preds_conc.reshape(all_preds_conc.shape[0], -1)
     all_labels_conc = all_labels_conc.reshape(all_labels_conc.shape[0], -1)
@@ -351,7 +348,7 @@ def save_experiment_testing_results(
     output_path = os.path.join(output_dir, file_name)
     df = pd.DataFrame(results)
     df.to_csv(output_path, index=False)
-    logger.info(f"Experiment results saved to {output_dir}")
+    logger.info(f"Experiment results saved to {output_path}")
 
 
 

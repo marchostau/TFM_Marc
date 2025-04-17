@@ -54,7 +54,11 @@ def get_seed_file_list(results_dir: str):
     ])
 
 
-def average_results(results_dir: str, output_csv_path: str):
+def average_results(
+        results_dir: str,
+        output_csv_path: str,
+        model_results: str = 'Linear'
+):
     file_list = get_seed_file_list(results_dir)
 
     if not file_list:
@@ -65,48 +69,63 @@ def average_results(results_dir: str, output_csv_path: str):
         ignore_index=True
     )
 
-    remove_keys = ['random_seed', 'cap_data']
-    conc_df['normalized_config'] = conc_df['config'].apply(
-        lambda x: normalize_config(x, remove_keys)
-    )
+    if model_results == 'Linear':
+        remove_keys = ['random_seed', 'cap_data']
+        conc_df['normalized_config'] = conc_df['config'].apply(
+            lambda x: normalize_config(x, remove_keys)
+        )
 
-    grouped_df = conc_df.groupby('normalized_config').agg({
-        'r2': 'mean',
-        'mse': 'mean',
-        'mae': 'mean',
-    }).reset_index()
+        grouped_df = conc_df.groupby('normalized_config').agg({
+            'r2': 'mean',
+            'mse': 'mean',
+            'mae': 'mean',
+        }).reset_index()
 
-    grouped_df = grouped_df.rename(
-        columns={'normalized_config': 'config'}
-    )
+        grouped_df = grouped_df.rename(
+            columns={'normalized_config': 'config'}
+        )
+    else:
+        grouped_df = conc_df.groupby('config').agg({
+            'r2': 'mean',
+            'mse': 'mean',
+            'mae': 'mean',
+        }).reset_index()
 
     grouped_df.to_csv(output_csv_path, index=False)
     return grouped_df
 
 
-def get_best_results(results_dir: str, output_csv_path: str):
+def get_best_results(
+        results_dir: str,
+        output_csv_path: str,
+        model_results: str = 'Linear'
+):
     file_list = get_seed_file_list(results_dir)
 
-    conc_df = pd.concat(
-        [pd.read_csv(f) for f in file_list],
-        ignore_index=True
-    )
-    remove_keys = [
-        'random_seed', 'cap_data', 'batch_size', 'lr',
-        'dir_source', 'optimizer', 'epochs', 'shuffle',
-        'checkpoint_freq', 'num_features'
-    ]
-    conc_df['normalized_config'] = conc_df['config'].apply(
-        lambda x: normalize_config(x, remove_keys)
-    )
+    df_list = []
+    for f in file_list:
+        df = pd.read_csv(f)
+        df['source_file'] = os.path.basename(f)
+        df_list.append(df)
 
-    best_idx = conc_df.groupby('normalized_config')['mse'].idxmin()
+    conc_df = pd.concat(df_list, ignore_index=True)
+
+    if model_results == 'Linear':
+        remove_keys = [
+            'random_seed', 'cap_data', 'batch_size', 'lr',
+            'dir_source', 'optimizer', 'epochs', 'shuffle',
+            'checkpoint_freq', 'num_features'
+        ]
+        conc_df['normalized_config'] = conc_df['config'].apply(
+            lambda x: normalize_config(x, remove_keys)
+        )
+        best_idx = conc_df.groupby('normalized_config')['mse'].idxmin()
+    else:
+        best_idx = conc_df.groupby('config')['mse'].idxmin()
 
     best_rows = conc_df.loc[best_idx].copy()
-
-    best_rows = best_rows.rename(columns={'mse': 'min_mse'})
-
     best_rows.to_csv(output_csv_path, index=False)
+
     return best_rows
 
 
@@ -206,44 +225,76 @@ def obtain_pred_vs_trues_best_models(
         original_norm_cols: list = [
             "latitude", "longitude", "wind_speed",
             "wind_direction", "u_component", "v_component"
-        ]
+        ],
+        model_name: str = 'Linear'
 ):
     best_results_df = pd.read_csv(best_results_path)
 
     for idx, row in best_results_df.iterrows():
-        config = row["config"].strip("{}")
-        config = [x.split(": ") for x in config.split(", '")]
-        config = [(x[0].replace("'", ''), x[1]) for x in config]
-        config = dict(config)
+        if model_name == 'Linear':
+            config = row["config"].strip("{}")
+            config = [x.split(": ") for x in config.split(", '")]
+            config = [(x[0].replace("'", ''), x[1]) for x in config]
+            config = dict(config)
 
-        seed = config["random_seed"]
-        model_name = str(config["model_class"]).split(
-            '.'
-        )[-1].replace("'>", "")
-        lag_forecast = config["lag_forecast"].split(",")
-        lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
-        lag = lag_forecast[0]
-        fh = lag_forecast[1]
-        batch_size = config["batch_size"]
-        lr = config["lr"]
+            seed = config["random_seed"]
+            model_name = str(config["model_class"]).split(
+                '.'
+            )[-1].replace("'>", "")
+            lag_forecast = config["lag_forecast"].split(",")
+            lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
+            lag = lag_forecast[0]
+            fh = lag_forecast[1]
+            batch_size = config["batch_size"]
+            lr = config["lr"]
 
-        file_path = (
-            f"seed{seed}/model_{model_name}/lag{lag}_fh{fh}/"
-            f"batch_size{batch_size}_lr{lr}/trues_pred_results.csv"
-        )
-        file_path = os.path.join(base_results_path, file_path)
-        trues_pred_df = pd.read_csv(file_path)
+            file_path = (
+                f"seed{seed}/model_{model_name}/lag{lag}_fh{fh}/"
+                f"batch_size{batch_size}_lr{lr}/trues_pred_results.csv"
+            )
+            file_path = os.path.join(base_results_path, file_path)
+            trues_pred_df = pd.read_csv(file_path)
 
-        print(f"Processing {file_path}")
-        print(f"Df obtained:\n{trues_pred_df}")
+            print(f"Processing {file_path}")
+            print(f"Df obtained:\n{trues_pred_df}")
 
-        file_output = (
-            f"seed{seed}_model{model_name}_lag{lag}_fh{fh}_"
-            f"batch_size{batch_size}_lr{lr}"
-        )
-        dir_output = os.path.join(base_dir_output, file_output)
+            file_output = (
+                f"seed{seed}_model{model_name}_lag{lag}_fh{fh}_"
+                f"batch_size{batch_size}_lr{lr}"
+            )
+            dir_output = os.path.join(base_dir_output, file_output)
 
-        print(f"Going to put results in dir {dir_output}")
+            print(f"Going to put results in dir {dir_output}")
+
+        elif model_name == 'VAR':
+            config = row["config"]
+            lag_forecast = config.split(",")
+            lag_forecast = [
+                value.strip(
+                    "() "
+                ).strip() for value in lag_forecast
+            ]
+            lag = lag_forecast[0]
+            fh = lag_forecast[1]
+            source_file = row["source_file"]
+            seed = (source_file.split("_"))[2]
+            seed = (seed.split("."))[0]
+
+            file_path = (
+                f"{seed}/model_VAR/lag{lag}_fh{fh}/"
+                "trues_pred_results.csv"
+            )
+
+            file_path = os.path.join(base_results_path, file_path)
+            trues_pred_df = pd.read_csv(file_path)
+
+            print(f"Processing {file_path}")
+            print(f"Df obtained:\n{trues_pred_df}")
+
+            file_output = (f"{seed}/model_VAR/lag{lag}_fh{fh}/")
+            dir_output = os.path.join(base_dir_output, file_output)
+
+            print(f"Going to put results in dir {dir_output}")
 
         postprocess_data(
             trues_pred_df,
@@ -253,7 +304,7 @@ def obtain_pred_vs_trues_best_models(
         )
 
 
-def concatenate_all_seeds_results(results_dir: str, output_csv_path: str):
+def concatenate_all_seeds_results(results_dir: str, output_csv_path: str = None):
     file_list = get_seed_file_list(results_dir)
 
     if not file_list:
@@ -264,4 +315,7 @@ def concatenate_all_seeds_results(results_dir: str, output_csv_path: str):
         ignore_index=True
     )
 
-    conc_df.to_csv(output_csv_path, index=False)
+    if output_csv_path is not None:
+        conc_df.to_csv(output_csv_path, index=False)
+
+    return conc_df

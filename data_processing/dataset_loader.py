@@ -17,17 +17,20 @@ class WindTimeSeriesDataset(Dataset):
     def __init__(
             self, dir_source: str, lag: int = 6,
             forecast_horizon: int = 1, randomize: bool = True,
-            random_seed: int = 0
+            random_seed: int = 0, file_list: list = None
     ):
         self.lag = lag
         self.forecast_horizon = forecast_horizon
-        self.file_list = sorted(
-            glob(os.path.join(dir_source, "*.csv"))
-        )
 
-        if randomize:
-            random.seed(random_seed)
-            random.shuffle(self.file_list)
+        if file_list is not None:
+            self.file_list = sorted(file_list)
+        else:
+            self.file_list = sorted(
+                glob(os.path.join(dir_source, "*.csv"))
+            )
+            if randomize:
+                random.seed(random_seed)
+                random.shuffle(self.file_list)
 
         logger.info(f"Randomize: {randomize} | Random seed: {random_seed}")
         logger.info(f"File list: {self.file_list}")
@@ -164,3 +167,121 @@ class WindTimeSeriesDataset(Dataset):
             "input_metadata": input_metadata,
             "target_metadata": target_metadata
         }
+
+
+def count_sequences(file_path, lag, forecast_horizon):
+    df = pd.read_csv(file_path, parse_dates=["timestamp"])
+    feature_data = df[["u_component", "v_component"]].values
+    if len(feature_data) < (lag + forecast_horizon):
+        return 0
+    if forecast_horizon == 1:
+        return len(feature_data) - lag
+    else:
+        return len(feature_data) - lag - forecast_horizon + 1
+
+
+def balanced_split(dir_source, test_dates, lag, forecast_horizon, target_ratio=0.2):
+    all_files = sorted(glob(os.path.join(dir_source, "*.csv")))
+
+    file_sequence_counts = {
+        f: count_sequences(f, lag, forecast_horizon)
+        for f in all_files
+    }
+
+    total_sequences = sum(file_sequence_counts.values())
+    target_test_sequences = total_sequences * target_ratio
+
+    test_files = [
+        f for f in all_files if any(date in os.path.basename(f) for date in test_dates)
+    ]
+
+    current_test_sequences = sum(file_sequence_counts[f] for f in test_files)
+
+    remaining_files = [f for f in all_files if f not in test_files]
+
+    random.seed(42) 
+    random.shuffle(remaining_files)
+
+    for f in remaining_files:
+        if current_test_sequences >= target_test_sequences:
+            break
+        test_files.append(f)
+        current_test_sequences += file_sequence_counts[f]
+
+    train_files = [f for f in all_files if f not in test_files]
+
+    return train_files, test_files, file_sequence_counts
+
+
+"""
+dir_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+)
+test_dates = [
+    "2024-07-29", "2024-07-16", "2024-07-13", "2024-07-07",
+    "2024-06-29", "2024-06-28", "2024-06-23", "2024-06-15",
+    "2024-06-13", "2024-06-03", "2024-06-03", "2024-05-30",
+    "2024-06-29", "2024-06-28", "2023-10-27"
+]
+
+lag = 6
+forecast = 3
+
+train_files, test_files, counts = balanced_split(
+    dir_source, test_dates, lag, forecast
+)
+
+train_dataset = WindTimeSeriesDataset(
+    dir_source=dir_source, lag=lag,
+    forecast_horizon=forecast, file_list=train_files
+)
+test_dataset = WindTimeSeriesDataset(
+    dir_source=dir_source, lag=lag,
+    forecast_horizon=forecast, file_list=test_files
+)
+
+train_sequences = sum(counts[f] for f in train_files)
+test_sequences = sum(counts[f] for f in test_files)
+total_sequences = train_sequences + test_sequences
+
+print(f"Lag: {lag} | Forecast horizon: {forecast}")
+print(f"Train Sequences: {len(train_dataset)} ({train_sequences/total_sequences:.2%})")
+print(f"Test Sequences: {len(test_dataset)} ({test_sequences/total_sequences:.2%})")
+
+"""
+"""
+dir_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+)
+all_files = sorted(glob(os.path.join(dir_source, "*.csv")))
+test_dates = [
+    "2024-07-29", "2024-07-16", "2024-07-13", "2024-07-07",
+    "2024-06-29", "2024-06-28", "2024-06-23", "2024-06-15",
+    "2024-06-13", "2024-06-03", "2024-06-03", "2024-05-30",
+    "2024-06-29", "2024-06-28", "2023-10-27"
+]
+test_files = [f for f in all_files if any(date in os.path.basename(f) for date in test_dates)]
+train_files = list(set(all_files) - set(test_files))
+
+print(f"Train files: {train_files}")
+print(f"Test files: {test_files}")
+
+lag = 6
+forecast = 3
+
+train_dataset = WindTimeSeriesDataset(
+    dir_source=dir_source, lag=lag,
+    forecast_horizon=forecast, file_list=train_files
+)
+test_dataset = WindTimeSeriesDataset(
+    dir_source=dir_source, lag=lag,
+    forecast_horizon=forecast, file_list=test_files
+)
+
+print(f"Train dataset: {train_dataset}")
+print(f"Train dataset len: {len(train_dataset)}")
+print(f"Test dataset: {test_dataset}")
+print(f"Test dataset len: {len(test_dataset)}")
+"""

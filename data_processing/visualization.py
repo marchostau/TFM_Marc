@@ -4,8 +4,16 @@ import math
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from statsmodels.tsa.stattools import adfuller, grangercausalitytests
+from statsmodels.tsa.stattools import (
+    adfuller, grangercausalitytests, kpss
+)
+
 import seaborn as sns
+from glob import glob
+
+from ..logging_information.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def compute_histograms(
@@ -84,6 +92,7 @@ def analyze_data(df: pd.DataFrame, variable: str):
 
     # Adjust layout
     plt.tight_layout()
+    plt.savefig("/home/marchostau/Desktop/u_comp.png")
     plt.show()
 
     # Perform Augmented Dickey-Fuller (ADF) Test
@@ -101,3 +110,67 @@ def analyze_data(df: pd.DataFrame, variable: str):
         )
 
     compute_granger_causality_tests(df)
+
+
+def compute_kpss_test(df: pd.DataFrame, variable: str):
+    result = kpss(df[variable].dropna(), regression='c')
+    logger.info(f'KPSS Statistic: {result[0]}')
+    logger.info(f'p-value: {result[1]}')
+
+    if result[1] < 0.05:
+        logger.info("Likely Non-Stationary (Reject Null Hypothesis)")
+    else:
+        logger.info("Likely Stationary (Fail to Reject Null)")
+
+
+def compute_adfuller_test(df: pd.DataFrame, variable: str):
+    try:
+        adf_result = adfuller(df[variable])
+        logger.info(f"ADF Statistic: {adf_result[0]}")
+        logger.info(f"p-value: {adf_result[1]}")
+        if adf_result[1] <= 0.05:
+            logger.info(
+                f"The time series '{variable}' is "
+                "stationary (reject the null hypothesis).")
+        else:
+            logger.info(
+                f"The time series '{variable}' is NOT "
+                "stationary (fail to reject the null hypothesis)."
+            )
+    except ValueError:
+        logger.info(
+                "sample size is too short to use selected "
+                "regression component"
+            )
+
+
+def dir_compute_adfuller_test(dir_source: pd.DataFrame, variable: str):
+    file_list = sorted(
+        glob(os.path.join(dir_source, "*.csv"))
+    )
+    for file_path in file_list:
+        logger.info(f"File path: {file_path}")
+        df = pd.read_csv(file_path, parse_dates=["timestamp"])
+        compute_adfuller_test(df, variable)
+
+
+dir_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+)
+
+logger.info("U COMPONENT")
+dir_compute_adfuller_test(dir_source, "u_component")
+# logger.info("V COMPONENT")
+# dir_compute_adfuller_test(dir_source, "v_component")
+
+"""
+from ..models.utils import concatenate_datasets
+df = concatenate_datasets(dir_source)
+logger.info(df)
+
+compute_adfuller_test(df, "u_component")
+compute_adfuller_test(df, "v_component")
+compute_kpss_test(df, "u_component")
+compute_kpss_test(df, "v_component")
+"""
