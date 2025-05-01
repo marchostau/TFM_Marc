@@ -22,7 +22,9 @@ from .utils import (
     average_results,
     get_best_results,
     obtain_pred_vs_trues_best_models,
-    concatenate_all_seeds_results
+    concatenate_all_seeds_results,
+    get_std_between_seed_results,
+    denormalize_original_dfs
 )
 
 logger = get_logger(__name__)
@@ -435,76 +437,64 @@ for seed, experiment_path in zip(random_seed_list, experiment_path_list):
     )
 """
 
-"""
+
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_diff_seeds/AllResults"
+    "(12,6),(12,9)]_seed0/AllResults"
 )
-results_dir = (
+output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data/seed0"
+    "(12,6),(12,9)]_seed0/AllResults/best_results.csv"
 )
 
-output_csv_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/evaluate_results/linear_models/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_diff_seeds/AllResults/best_results.csv"
-)
-output_csv_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/evaluate_results/linear_models/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data/best_results.csv"
-)
 #average_results(results_dir, output_csv_path)
 get_best_results(results_dir, output_csv_path)
-"""
 
 
-best_results_path = (
+"""best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/linear_models/results[((3,3),(6,6),"
     "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
     "_diff_seeds/BestResults/best_results.csv"
-)
+)"""
 best_results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/evaluate_results/linear_models/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data/BestResults/best_results.csv"
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_seed0/AllResults/best_results.csv"
 )
-base_results_path = (
+
+"""base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/linear_models/results[((3,3),(6,6),"
     "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
     "_diff_seeds"
-)
+)"""
 base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data/"
+    "(12,6),(12,9)]_seed0/"
 )
 dir_original_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
     "complete_datasets_csv"
 )
-base_dir_output = (
+"""base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/linear_models/results[((3,3),(6,6),"
     "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_diff_seeds/BestResults/"
-)
+    "_diff_seeds/BestResults/Test"
+)"""
 base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data/BestResults/"
+    "(12,6),(12,9)]_seed0/BestResults/"
 )
 obtain_pred_vs_trues_best_models(
     best_results_path,
@@ -512,6 +502,7 @@ obtain_pred_vs_trues_best_models(
     dir_original_source,
     base_dir_output
 )
+
 
 
 """
@@ -529,4 +520,56 @@ output_csv_path = (
     "concatenated_seed_results.csv"
 )
 concatenate_all_seeds_results(results_dir, output_csv_path)
+"""
+
+"""
+concatenated_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_diff_seeds/"
+    "AllResults/concatenated_seed_results.csv"
+)
+concatenated_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
+    "concatenated_seed_results.csv"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_diff_seeds/"
+    "AllResults/std_between_seed_results.csv"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
+    "std_between_seed_results.csv"
+)
+conc_res_df = pd.read_csv(concatenated_results_path)
+
+get_std_between_seed_results(
+    conc_res_df=conc_res_df,
+    model_results='VAR',
+    output_csv_path=output_csv_path
+)
+"""
+
+"""
+dir_denorm = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+
+)
+dir_original_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv"
+)
+dir_output = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "Denormalized/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+)
+
+denormalize_original_dfs(dir_denorm, dir_original_source, dir_output)
 """

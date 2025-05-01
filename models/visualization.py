@@ -472,10 +472,10 @@ def plot_linear_and_var_results(
 
 base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
 results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_diff_seeds"
+    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
 )
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-#results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/testing_results_seed0.csv"
+#results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
+results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/testing_results_seed0.csv"
 
 df_linear = pd.read_csv(results_path)
 
@@ -485,12 +485,11 @@ plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
 plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
 plot_best_linear_results(df_linear, f"{plot_base}/best_results")
 
-"""
 results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_non_stationary/AllResults/"
-    "results_averaged.csv"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0/AllResults/"
+    "testing_results_seed0.csv"
 )
 df_var = pd.read_csv(results_path)
 
@@ -498,16 +497,15 @@ base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/plots/testing_results/var_model/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_non_stationary"
+    "(12,6),(12,9)]_capped_data_seed0"
 )
 plot_all_var_results(df_var, base_dir_out)
-"""
-"""
+
+
 base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
 )
 plot_linear_and_var_results(df_linear, df_var, base_dir_out)
 
-"""

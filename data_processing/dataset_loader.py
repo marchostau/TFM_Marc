@@ -5,6 +5,7 @@ import random
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+from torch.utils.data import Subset
 from glob import glob
 
 from ..logging_information.logging_config import get_logger
@@ -213,6 +214,47 @@ def balanced_split(dir_source, test_dates, lag, forecast_horizon, target_ratio=0
     return train_files, test_files, file_sequence_counts
 
 
+def analyze_segment_balance(dir_source, lag_forecast_list, train_ratio=0.8, randomize=True, random_seed=0):
+    results = []
+
+    for lag, forecast in lag_forecast_list:
+        full_dataset = WindTimeSeriesDataset(
+            dir_source=dir_source,
+            lag=lag,
+            forecast_horizon=forecast,
+            randomize=randomize,
+            random_seed=random_seed
+        )
+
+        train_dataset, test_dataset = split_dataset(full_dataset, train_ratio)
+
+        train_indices = train_dataset.indices
+        test_indices = test_dataset.indices
+
+        total_segment_ids = set([segment_num for segment_num,_ in full_dataset.data_indices])
+        train_file_ids = set([full_dataset.data_indices[i][0] for i in train_indices])
+        test_file_ids = set([full_dataset.data_indices[i][0] for i in test_indices])
+
+        train_percentage = len(train_file_ids) / len(total_segment_ids) * 100
+        test_percentage = (len(test_file_ids)-1) / (len(total_segment_ids))* 100
+
+        overlap_ids = train_file_ids & test_file_ids
+        overlap_count = len(overlap_ids)
+
+        results.append({
+            'lag': lag,
+            'forecast': forecast,
+            'num_train_segments': len(train_file_ids),
+            'num_test_segments': len(test_file_ids),
+            'train_percentage': round(train_percentage, 2),
+            'test_percentage': round(test_percentage, 2),
+            'overlap_ids': overlap_ids,
+            'overlap_count': overlap_count
+        })
+
+    return pd.DataFrame(results)
+
+
 """
 dir_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
@@ -285,3 +327,18 @@ print(f"Train dataset len: {len(train_dataset)}")
 print(f"Test dataset: {test_dataset}")
 print(f"Test dataset len: {len(test_dataset)}")
 """
+
+dir_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+)
+lag_forecast_list = [
+    (3, 3), (6, 3), (9, 3),
+    (6, 6), (9, 6), (12, 6),
+    (9, 9), (12, 9),
+    (12, 12)
+]
+
+df = analyze_segment_balance(dir_source, lag_forecast_list)
+print(df)
+df.to_csv('segment_analysis.csv')

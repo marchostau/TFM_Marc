@@ -223,7 +223,7 @@ def save_testing_results_capped(config, output_dir: str, train_ratio: int = 0.8)
     logger.info(f"Experiment results saved to {output_csv_path}")
 
 
-"""
+
 search_space = {
     "lag_forecast_list": [
         (3, 3), (6, 3), (9, 3),
@@ -246,6 +246,7 @@ search_space = {
     "shuffle": False
 }
 
+"""
 random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 for seed in random_seed_list:
     search_space["random_seed"] = seed
@@ -257,43 +258,43 @@ for seed in random_seed_list:
     )
     save_testing_results(search_space, results_save_path)
     #save_testing_results_capped(search_space, results_save_path)
+"""
 
-"""
-"""
+
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_non_stationary/AllResults"
+    "_seed0/AllResults"
 )
-output_csv_path = (
+"""output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_non_stationary/AllResults/results_averaged.csv"
-)
-average_results(results_dir, output_csv_path, 'VAR')
+    "_seed0/AllResults/results_averaged.csv"
+)"""
+#average_results(results_dir, output_csv_path, 'VAR')
 
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_non_stationary/AllResults/best_results.csv"
+    "_seed0/AllResults/best_results.csv"
 )
 get_best_results(results_dir, output_csv_path, 'VAR')
-"""
+
 
 best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_non_stationary/BestResults/best_results.csv"
+    "_seed0/AllResults/best_results.csv"
 )
 base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_non_stationary"
+    "_seed0"
 )
 dir_original_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
@@ -303,7 +304,7 @@ base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_non_stationary/BestResults/"
+    "_seed0/BestResults/"
 )
 obtain_pred_vs_trues_best_models(
     best_results_path,
@@ -360,3 +361,49 @@ results_save_path = (
 search_space["random_seed"] = "None"
 save_testing_results(search_space, results_save_path)
 """
+
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/var_model/results[((3,3)"
+    ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_capped_data_seed0/AllResults"
+)
+
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/var_model/results[((3,3)"
+    ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_capped_data_seed0/AllResults/best_results.csv"
+)
+get_best_results(results_dir, output_csv_path, 'VAR')
+
+
+best_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/var_model/results[((3,3)"
+    ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_capped_data_seed0/AllResults/best_results.csv"
+)
+base_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/var_model/results[((3,3)"
+    ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_capped_data_seed0"
+)
+dir_original_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv"
+)
+base_dir_output = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/var_model/results[((3,3)"
+    ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "_capped_data_seed0/BestResults/"
+)
+obtain_pred_vs_trues_best_models(
+    best_results_path,
+    base_results_path,
+    dir_original_source,
+    base_dir_output,
+    model_name='VAR'
+)

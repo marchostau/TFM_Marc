@@ -139,6 +139,73 @@ def custom_collate_fn(batch):
     return batch_dict
 
 
+def denormalize_original_dfs(
+        dir_denorm: str,
+        dir_original_source: str,
+        dir_output: str,
+        original_norm_cols: list = [
+            "latitude", "longitude", "wind_speed",
+            "wind_direction", "u_component", "v_component"
+        ]
+):
+    df = concatenate_datasets(dir_denorm)
+    original_source_df = concatenate_datasets(dir_original_source)
+
+    print(original_source_df)
+
+    original_mean = original_source_df[original_norm_cols].mean()
+    original_std = original_source_df[original_norm_cols].std()
+
+    denorm_cols = {
+        "u_component": "u_component",
+        "v_component": "v_component",
+        "latitude": "latitude",
+        "longitude": "longitude",
+        "wind_speed": "wind_speed",
+        "wind_direction": "wind_direction"
+    }
+
+    for file_name, file_df in df.groupby("file_name"):
+        print(file_name)
+        print(file_df)
+        denorm_df = reverse_z_standardization(
+            file_df,
+            denorm_cols,
+            original_mean,
+            original_std
+        )
+        """
+        denorm_df["wind_speed"] = denorm_df.apply(
+            lambda row: compute_wind_speed(
+                row['u_component'],
+                row['v_component']
+            ), axis=1
+        )
+        denorm_df["pred_wind_direction"] = denorm_df.apply(
+            lambda row: compute_wind_direction(
+                row['u_component'],
+                row['v_component']
+            ), axis=1
+        )
+
+        denorm_df["wind_speed"] = denorm_df[
+            "wind_speed"
+        ].apply(lambda x: float(str(x).split()[0]))
+        denorm_df["wind_direction"] = denorm_df[
+            "wind_direction"
+        ].apply(lambda x: float(str(x).split()[0]))
+        """
+        logger.info(f"Df ({file_name}) after posprocess:\n{denorm_df}")
+
+        os.makedirs(dir_output, exist_ok=True)
+        file_output = os.path.join(dir_output, f"{file_name}.csv")
+        denorm_df.to_csv(file_output, index=False)
+
+
+def remove_segment_from_filename(file_name: str):
+    return re.sub(r'_segment_\d', '', file_name)
+
+
 def postprocess_data(
         df: pd.DataFrame,
         dir_original_source: str,
@@ -158,6 +225,15 @@ def postprocess_data(
         "wind_speed",
         "wind_direction"
     ]
+
+    # Here you can try to remove _segment_X part of the file name.
+    # Then you will have the segments of each day joined.
+    df["file_name"] = df.apply(
+        lambda row: remove_segment_from_filename(
+            row["file_name"]
+        ), axis=1
+    )
+    print(f"New DF:\n{df}")
 
     agg_dict = {col: "mean" for col in mean_cols}
     agg_dict.update({col: "first" for col in constant_cols})
@@ -190,24 +266,29 @@ def postprocess_data(
             original_std
         )
 
-        denorm_df["pred_wind_speed"] = denorm_df.apply(
+        denorm_df.rename({
+            'wind_speed': 'original_wind_speed',
+            'wind_direction': 'original_wind_direction'
+        })
+
+        denorm_df["wind_speed"] = denorm_df.apply(
             lambda row: compute_wind_speed(
                 row['pred_u_component'],
                 row['pred_v_component']
             ), axis=1
         )
-        denorm_df["pred_wind_direction"] = denorm_df.apply(
+        denorm_df["wind_direction"] = denorm_df.apply(
             lambda row: compute_wind_direction(
                 row['pred_u_component'],
                 row['pred_v_component']
             ), axis=1
         )
 
-        denorm_df["pred_wind_speed"] = denorm_df[
-            "pred_wind_speed"
+        denorm_df["wind_speed"] = denorm_df[
+            "wind_speed"
         ].apply(lambda x: float(str(x).split()[0]))
-        denorm_df["pred_wind_direction"] = denorm_df[
-            "pred_wind_direction"
+        denorm_df["wind_direction"] = denorm_df[
+            "wind_direction"
         ].apply(lambda x: float(str(x).split()[0]))
 
         logger.info(f"Df ({file_name}) after posprocess:\n{denorm_df}")
@@ -291,7 +372,7 @@ def obtain_pred_vs_trues_best_models(
             print(f"Processing {file_path}")
             print(f"Df obtained:\n{trues_pred_df}")
 
-            file_output = (f"{seed}/model_VAR/lag{lag}_fh{fh}/")
+            file_output = (f"{seed}_model_VAR_lag{lag}_fh{fh}")
             dir_output = os.path.join(base_dir_output, file_output)
 
             print(f"Going to put results in dir {dir_output}")
@@ -319,3 +400,34 @@ def concatenate_all_seeds_results(results_dir: str, output_csv_path: str = None)
         conc_df.to_csv(output_csv_path, index=False)
 
     return conc_df
+
+
+def get_std_between_seed_results(
+        conc_res_df: pd.DataFrame,
+        output_csv_path: str,
+        model_results: str = 'Linear'
+):
+    if model_results == 'Linear':
+        remove_keys = ['random_seed', 'cap_data']
+        conc_res_df['normalized_config'] = conc_res_df['config'].apply(
+            lambda x: normalize_config(x, remove_keys)
+        )
+
+        grouped_df = conc_res_df.groupby('normalized_config').agg({
+            'r2': 'std',
+            'mse': 'std',
+            'mae': 'std',
+        }).reset_index()
+
+        grouped_df = grouped_df.rename(
+            columns={'normalized_config': 'config'}
+        )
+    else:
+        grouped_df = conc_res_df.groupby('config').agg({
+            'r2': 'std',
+            'mse': 'std',
+            'mae': 'std',
+        }).reset_index()
+
+    grouped_df.to_csv(output_csv_path, index=False)
+    return grouped_df
