@@ -469,7 +469,7 @@ def plot_linear_and_var_results(
         plt.clf()
 
 
-
+"""
 base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
 results_suffix = (
     "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
@@ -484,12 +484,13 @@ plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
 plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
 plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
 plot_best_linear_results(df_linear, f"{plot_base}/best_results")
+"""
 
 results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0/AllResults/"
-    "testing_results_seed0.csv"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone/AllResults/"
+    "testing_results_seedNone.csv"
 )
 df_var = pd.read_csv(results_path)
 
@@ -497,7 +498,7 @@ base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/plots/testing_results/var_model/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seed0"
+    "(12,6),(12,9)]_capped_data_seedNone"
 )
 plot_all_var_results(df_var, base_dir_out)
 
@@ -505,7 +506,32 @@ plot_all_var_results(df_var, base_dir_out)
 base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone"
 )
-plot_linear_and_var_results(df_linear, df_var, base_dir_out)
+#plot_linear_and_var_results(df_linear, df_var, base_dir_out)
 
+
+
+
+results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone/AllResults/"
+    "testing_results_seedNone.csv"
+)
+df_var = pd.read_csv(results_path)
+
+base_dir_out = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/plots/testing_results/var_model/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_seedNone"
+)
+plot_all_var_results(df_var, base_dir_out)
+
+
+base_dir_out = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone"
+)

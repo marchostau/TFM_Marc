@@ -1,8 +1,10 @@
 import os
 import re
+
 import pandas as pd
 import torch
 from torch.utils.data import Subset
+from glob import glob
 
 from ..logging_information.logging_config import get_logger
 from ..data_processing.normalization import reverse_z_standardization
@@ -50,7 +52,7 @@ def get_seed_file_list(results_dir: str):
         for f in os.listdir(results_dir)
         if (f.endswith('.csv') and
             os.path.isfile(os.path.join(results_dir, f)) and
-            re.search(r'seed\d+\.csv$', f))
+            re.search(r'seed(\d+|None)\.csv$', f))
     ])
 
 
@@ -226,14 +228,12 @@ def postprocess_data(
         "wind_direction"
     ]
 
-    # Here you can try to remove _segment_X part of the file name.
-    # Then you will have the segments of each day joined.
     df["file_name"] = df.apply(
         lambda row: remove_segment_from_filename(
             row["file_name"]
         ), axis=1
     )
-    print(f"New DF:\n{df}")
+    #print(f"New DF:\n{df}")
 
     agg_dict = {col: "mean" for col in mean_cols}
     agg_dict.update({col: "first" for col in constant_cols})
@@ -266,7 +266,7 @@ def postprocess_data(
             original_std
         )
 
-        denorm_df.rename({
+        denorm_df = denorm_df.rename({
             'wind_speed': 'original_wind_speed',
             'wind_direction': 'original_wind_direction'
         })
@@ -307,12 +307,12 @@ def obtain_pred_vs_trues_best_models(
             "latitude", "longitude", "wind_speed",
             "wind_direction", "u_component", "v_component"
         ],
-        model_name: str = 'Linear'
+        model: str = 'Linear'
 ):
     best_results_df = pd.read_csv(best_results_path)
 
     for idx, row in best_results_df.iterrows():
-        if model_name == 'Linear':
+        if model == 'Linear':
             config = row["config"].strip("{}")
             config = [x.split(": ") for x in config.split(", '")]
             config = [(x[0].replace("'", ''), x[1]) for x in config]
@@ -336,8 +336,8 @@ def obtain_pred_vs_trues_best_models(
             file_path = os.path.join(base_results_path, file_path)
             trues_pred_df = pd.read_csv(file_path)
 
-            print(f"Processing {file_path}")
-            print(f"Df obtained:\n{trues_pred_df}")
+            #print(f"Processing {file_path}")
+            #print(f"Df obtained:\n{trues_pred_df}")
 
             file_output = (
                 f"seed{seed}_model{model_name}_lag{lag}_fh{fh}_"
@@ -345,9 +345,9 @@ def obtain_pred_vs_trues_best_models(
             )
             dir_output = os.path.join(base_dir_output, file_output)
 
-            print(f"Going to put results in dir {dir_output}")
+            #print(f"Going to put results in dir {dir_output}")
 
-        elif model_name == 'VAR':
+        elif model == 'VAR':
             config = row["config"]
             lag_forecast = config.split(",")
             lag_forecast = [
@@ -369,14 +369,19 @@ def obtain_pred_vs_trues_best_models(
             file_path = os.path.join(base_results_path, file_path)
             trues_pred_df = pd.read_csv(file_path)
 
-            print(f"Processing {file_path}")
-            print(f"Df obtained:\n{trues_pred_df}")
+            #print(f"Processing {file_path}")
+            #print(f"Df obtained:\n{trues_pred_df}")
 
             file_output = (f"{seed}_model_VAR_lag{lag}_fh{fh}")
             dir_output = os.path.join(base_dir_output, file_output)
 
-            print(f"Going to put results in dir {dir_output}")
+            #print(f"Going to put results in dir {dir_output}")
 
+
+        #print(f"File path source: {file_path}")
+        #print(f"Trues pred df:\n{trues_pred_df}")
+        print(f"Dir output: {dir_output}")
+        print(f"Model {model}, lag {lag}, forecast {fh}")
         postprocess_data(
             trues_pred_df,
             dir_original_source,
@@ -431,3 +436,28 @@ def get_std_between_seed_results(
 
     grouped_df.to_csv(output_csv_path, index=False)
     return grouped_df
+
+
+def get_num_timesteps(dir_source: str, output_file: str):
+    file_list = glob(os.path.join(dir_source, "*.csv"))
+    timesteps_info = {}
+
+    for file_path in file_list:
+        df = pd.read_csv(
+            file_path, parse_dates=["timestamp"],
+            dtype={"file_name": str}, low_memory=False
+        )
+        timesteps_info[os.path.basename(file_path)] = len(df) - 1
+
+    summary_df = pd.DataFrame(list(timesteps_info.items()), columns=["file_name", "num_timesteps"])
+    summary_df.to_csv(os.path.join(dir_source, output_file), index=False)
+
+
+"""
+dir_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+)
+output_file = "/home/marchostau/Desktop/timesteps_summary.csv"
+get_num_timesteps(dir_source, output_file)ç
+"""

@@ -34,17 +34,17 @@ class WindTimeSeriesDataset(Dataset):
                 random.shuffle(self.file_list)
 
         logger.info(f"Randomize: {randomize} | Random seed: {random_seed}")
-        logger.info(f"File list: {self.file_list}")
+        #logger.info(f"File list: {self.file_list}")
 
         self.data_indices = self._build_index()
-        logger.info(f"Data indices: {self.data_indices}")
+        #logger.info(f"Data indices: {self.data_indices}")
 
     def _build_index(self):
-        logger.info("Building index of the Wind Time Series Dataset")
-        logger.info(
-            f"Configuration: Lag = {self.lag} | "
-            f"Forecast Horizon = {self.forecast_horizon}"
-        )
+        #logger.info("Building index of the Wind Time Series Dataset")
+        #logger.info(
+        #    f"Configuration: Lag = {self.lag} | "
+        #    f"Forecast Horizon = {self.forecast_horizon}"
+        #)
         dataset_info = {}
         lost_timestamps = 0
         index = []
@@ -58,11 +58,11 @@ class WindTimeSeriesDataset(Dataset):
             feature_data = df[["u_component", "v_component"]].values
 
             if len(feature_data) < (self.lag + self.forecast_horizon):
-                logger.warning(
-                    f"Length df {len(df)} < {self.lag + self.forecast_horizon}"
-                    f" | File_idx: {file_idx} | File path: {file_path}"
-                )
-                logger.warning(f"File {file_path} has 0 sequences")
+                #logger.warning(
+                #    f"Length df {len(df)} < {self.lag + self.forecast_horizon}"
+                #    f" | File_idx: {file_idx} | File path: {file_path}"
+                #)
+                #logger.warning(f"File {file_path} has 0 sequences")
                 lost_timestamps += len(df)
                 limit = self.lag + self.forecast_horizon
                 dataset_info[file_path] = f"0 ({len(df)} < {limit})"
@@ -81,7 +81,7 @@ class WindTimeSeriesDataset(Dataset):
                     num_sequences += 1
 
             dataset_info[file_path] = num_sequences
-            logger.info(f"File {file_path} has {num_sequences} of sequences")
+            #logger.info(f"File {file_path} has {num_sequences} of sequences")
 
         dataset_info["LOST TIMESTAMPS"] = lost_timestamps
         dataset_info["TOTAL"] = len(index)
@@ -94,11 +94,11 @@ class WindTimeSeriesDataset(Dataset):
             w = csv.writer(f)
             w.writerows(dataset_info.items())
 
-        logger.info(
-            f"Index of the Wind Time Series Dataset built for "
-            f"lag {self.lag} and forecast {self.forecast_horizon} -> "
-            f"Length index: {len(index)}"
-        )
+        #logger.info(
+        #    f"Index of the Wind Time Series Dataset built for "
+        #    f"lag {self.lag} and forecast {self.forecast_horizon} -> "
+        #    f"Length index: {len(index)}"
+        #)
         return index
 
     def __len__(self):
@@ -327,7 +327,7 @@ print(f"Train dataset len: {len(train_dataset)}")
 print(f"Test dataset: {test_dataset}")
 print(f"Test dataset len: {len(test_dataset)}")
 """
-
+"""
 dir_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
     "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
@@ -342,3 +342,4 @@ lag_forecast_list = [
 df = analyze_segment_balance(dir_source, lag_forecast_list)
 print(df)
 df.to_csv('segment_analysis.csv')
+"""

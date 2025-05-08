@@ -25,6 +25,7 @@ def evaluate_var_model(config, output_dir: str, train_ratio: int = 0.8):
     logger.info("Initializing VAR model for evaluation...")
     logger.info(f"Evaluation configuration: {config}")
 
+    randomize = config.get("randomize", False)
     lag, forecast_horizon = config["lag_forecast"]
     train_num_seq = config.get("train_num_seq")
     test_num_seq = config.get("test_num_seq")
@@ -32,14 +33,14 @@ def evaluate_var_model(config, output_dir: str, train_ratio: int = 0.8):
     train_dataset = config.get("train_dataset")
     test_dataset = config.get("test_dataset")
 
-    logger.info(f"Train dataset: {train_dataset}")
-    logger.info(f"Test dataset: {test_dataset}")
+    #logger.info(f"Train dataset: {train_dataset}")
+    #logger.info(f"Test dataset: {test_dataset}")
 
     if train_dataset is None and test_dataset is None:
         full_dataset = WindTimeSeriesDataset(
             config["dir_source"], lag=lag,
             forecast_horizon=forecast_horizon,
-            randomize=True, random_seed=random_seed
+            randomize=randomize, random_seed=random_seed
         )
         train_dataset, test_dataset = split_dataset(full_dataset, train_ratio)
 
@@ -84,13 +85,13 @@ def evaluate_var_model(config, output_dir: str, train_ratio: int = 0.8):
                 act_df = act_df.iloc[:final_seq]
             train_data = pd.concat([train_data, act_df])
 
-        logger.info(f"File list training: {file_list}")
-        logger.info(f"Train data df:\n{train_data}")
+        #logger.info(f"File list training: {file_list}")
+        #logger.info(f"Train data df:\n{train_data}")
 
-    logger.info(f"Train data indices: {train_dataset.data_indices}")
-    logger.info(f"Test data indices: {test_dataset.data_indices}")    
-    logger.info(f"Train len info: {len(train_dataset)}")
-    logger.info(f"Test len info: {len(test_dataset)}")
+    #logger.info(f"Train data indices: {train_dataset.data_indices}")
+    #logger.info(f"Test data indices: {test_dataset.data_indices}")    
+    #logger.info(f"Train len info: {len(train_dataset)}")
+    #logger.info(f"Test len info: {len(test_dataset)}")
 
     test_loader = DataLoader(
         test_dataset,
@@ -185,10 +186,10 @@ def save_testing_results(config, output_dir: str, train_ratio: int = 0.8):
             config["train_dataset"] = train_dataset
             config["test_dataset"] = test_dataset
 
-            logger.info(
-                "Some testing dates are mandatory for "
-                f"({lag}_{forecast_horizon})"
-            )
+            #logger.info(
+            #    "Some testing dates are mandatory for "
+            #    f"({lag}_{forecast_horizon})"
+            #)
 
         metrics = evaluate_var_model(config, output_dir)
         metrics["config"] = (lag, forecast_horizon)
@@ -222,6 +223,35 @@ def save_testing_results_capped(config, output_dir: str, train_ratio: int = 0.8)
     df.to_csv(output_csv_path, index=False)
     logger.info(f"Experiment results saved to {output_csv_path}")
 
+"""
+search_space = {
+    "lag_forecast_list": [
+        (3, 3), (6, 3), (9, 3),
+        (6, 6), (9, 6), (12, 6),
+        (9, 9), (12, 9),
+        (12, 12)
+    ],
+    "batch_size": 16,
+    "dir_source": (
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+        "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
+    ),
+    "num_features": 2,
+    "shuffle": False,
+    "randomize": False
+}
+
+#random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+random_seed_list = [None]
+for seed in random_seed_list:
+    search_space["random_seed"] = seed
+    results_save_path = (
+        "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+        "evaluate_results/var_model/results[((3,3),(6,6),"
+        "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone"
+        f"/seed{seed}"
+    )
+    save_testing_results(search_space, results_save_path)
 
 
 search_space = {
@@ -231,55 +261,55 @@ search_space = {
         (9, 9), (12, 9),
         (12, 12)
     ],
-    #"train_test_seqs": [
-    #    (8275, 2069), (8275, 2069), (8275, 2069),
-    #    (5936, 1485), (5936, 1485), (5936, 1485),
-    #    (4885, 1222), (4885, 1222),
-    #    (3924, 982)
-    #],
+    "train_test_seqs": [
+        (8275, 2069), (8275, 2069), (8275, 2069),
+        (5936, 1485), (5936, 1485), (5936, 1485),
+        (4885, 1222), (4885, 1222),
+        (3924, 982)
+    ],
     "batch_size": 16,
     "dir_source": (
         "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
         "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
     ),
     "num_features": 2,
-    "shuffle": False
+    "shuffle": False,
+    "randomize": False
 }
 
-"""
-random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+#random_seed_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+random_seed_list = [None]
 for seed in random_seed_list:
     search_space["random_seed"] = seed
     results_save_path = (
         "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
         "evaluate_results/var_model/results[((3,3),(6,6),"
-        "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+        "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone"
         f"/seed{seed}"
     )
-    save_testing_results(search_space, results_save_path)
-    #save_testing_results_capped(search_space, results_save_path)
+    save_testing_results_capped(search_space, results_save_path)
 """
 
-
+"""
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seed0/AllResults"
+    "_seedNone/AllResults"
 )
-"""output_csv_path = (
+output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seed0/AllResults/results_averaged.csv"
-)"""
+    "_seedNone/AllResults/results_averaged.csv"
+)
 #average_results(results_dir, output_csv_path, 'VAR')
 
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seed0/AllResults/best_results.csv"
+    "_seedNone/AllResults/best_results.csv"
 )
 get_best_results(results_dir, output_csv_path, 'VAR')
 
@@ -288,13 +318,13 @@ best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seed0/AllResults/best_results.csv"
+    "_seedNone/AllResults/best_results.csv"
 )
 base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seed0"
+    "_seedNone"
 )
 dir_original_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
@@ -304,15 +334,17 @@ base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seed0/BestResults/"
+    "_seedNone/BestResults/"
 )
 obtain_pred_vs_trues_best_models(
     best_results_path,
     base_results_path,
     dir_original_source,
     base_dir_output,
-    model_name='VAR'
+    model='VAR'
 )
+"""
+
 
 """
 results_dir = (
@@ -362,18 +394,19 @@ search_space["random_seed"] = "None"
 save_testing_results(search_space, results_save_path)
 """
 
+
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seed0/AllResults"
+    "_capped_data_seedNone/AllResults"
 )
 
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seed0/AllResults/best_results.csv"
+    "_capped_data_seedNone/AllResults/best_results.csv"
 )
 get_best_results(results_dir, output_csv_path, 'VAR')
 
@@ -382,13 +415,13 @@ best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seed0/AllResults/best_results.csv"
+    "_capped_data_seedNone/AllResults/best_results.csv"
 )
 base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seed0"
+    "_capped_data_seedNone"
 )
 dir_original_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
@@ -398,12 +431,12 @@ base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seed0/BestResults/"
+    "_capped_data_seedNone/BestResults/"
 )
 obtain_pred_vs_trues_best_models(
     best_results_path,
     base_results_path,
     dir_original_source,
     base_dir_output,
-    model_name='VAR'
+    model='VAR'
 )
