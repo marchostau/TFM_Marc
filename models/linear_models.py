@@ -379,7 +379,7 @@ search_space = {
     "cap_data": False,
     "randomize": False,
 }
-
+"""
 # random_seed_list = [None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 random_seed_list = [None]
 for seed in random_seed_list:
@@ -416,7 +416,8 @@ search_space = {
     "cap_data": True,
     "randomize": False,
 }
-
+"""
+"""
 # random_seed_list = [None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 random_seed_list = [None]
 for seed in random_seed_list:
@@ -428,9 +429,7 @@ for seed in random_seed_list:
     tune.run(
         train_linear_model, config=search_space, storage_path=storage_path
     )
-
-
-
+"""
 
 """
 base_dir = '/home/marchostau/Desktop/TFM/Code/ProjectCode/models/trained_models'
@@ -476,21 +475,28 @@ for seed, experiment_path in zip(random_seed_list, experiment_path_list):
     )
 """
 
+
 """
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seed0/AllResults"
+    "(12,6),(12,9)]/AllResults"
 )
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seed0/AllResults/best_results.csv"
+    "(12,6),(12,9)]/AllResults/results_averaged.csv"
 )
+average_results(results_dir, output_csv_path)
 
-#average_results(results_dir, output_csv_path)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]/AllResults/best_results.csv"
+)
 get_best_results(results_dir, output_csv_path)
 
 
@@ -498,13 +504,13 @@ best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/linear_models/results[((3,3),(6,6),"
     "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seed0/AllResults/best_results.csv"
+    "/AllResults/best_results.csv"
 )
 base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seed0/"
+    "(12,6),(12,9)]/"
 )
 dir_original_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
@@ -514,7 +520,7 @@ base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seed0/BestResults/"
+    "(12,6),(12,9)]/BestResults/"
 )
 obtain_pred_vs_trues_best_models(
     best_results_path,
@@ -524,56 +530,48 @@ obtain_pred_vs_trues_best_models(
 )
 """
 
-"""
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_diff_seeds/AllResults"
+    "(12,6),(12,9)]/AllResults"
 )
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_diff_seeds/AllResults/"
+    "(12,6),(12,9)]/AllResults/"
     "concatenated_seed_results.csv"
 )
 concatenate_all_seeds_results(results_dir, output_csv_path)
-"""
 
-"""
 concatenated_results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/linear_models/results[((3,3),(6,6),"
-    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_diff_seeds/"
-    "AllResults/concatenated_seed_results.csv"
-)
-concatenated_results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]/AllResults/"
     "concatenated_seed_results.csv"
 )
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/linear_models/results[((3,3),(6,6),"
-    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_diff_seeds/"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/"
     "AllResults/std_between_seed_results.csv"
 )
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/AllResults/"
     "std_between_seed_results.csv"
 )
 conc_res_df = pd.read_csv(concatenated_results_path)
 
 get_std_between_seed_results(
     conc_res_df=conc_res_df,
-    model_results='VAR',
+    #model_results='VAR',
     output_csv_path=output_csv_path
 )
-"""
+
 
 """
 dir_denorm = (
@@ -592,34 +590,42 @@ dir_output = (
 
 denormalize_original_dfs(dir_denorm, dir_original_source, dir_output)
 """
-"""
+
+
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_seed0/AllResults"
+    "(12,6),(12,9)]_capped_data/AllResults"
 )
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_seed0/AllResults/best_results.csv"
+    "(12,6),(12,9)]_capped_data/AllResults/results_averaged.csv"
 )
+average_results(results_dir, output_csv_path)
 
-#average_results(results_dir, output_csv_path)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults/best_results.csv"
+)
 get_best_results(results_dir, output_csv_path)
+
 
 best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/linear_models/results[((3,3),(6,6),"
-    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seed0/AllResults/best_results.csv"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+    "/AllResults/best_results.csv"
 )
 base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_seed0/"
+    "(12,6),(12,9)]_capped_data/"
 )
 dir_original_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
@@ -629,7 +635,7 @@ base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_seed0/BestResults/"
+    "(12,6),(12,9)]_capped_data/BestResults/"
 )
 obtain_pred_vs_trues_best_models(
     best_results_path,
@@ -637,4 +643,45 @@ obtain_pred_vs_trues_best_models(
     dir_original_source,
     base_dir_output
 )
-"""
+
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults/"
+    "concatenated_seed_results.csv"
+)
+concatenate_all_seeds_results(results_dir, output_csv_path)
+
+concatenated_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults/"
+    "concatenated_seed_results.csv"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/"
+    "AllResults/std_between_seed_results.csv"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
+    "std_between_seed_results.csv"
+)
+conc_res_df = pd.read_csv(concatenated_results_path)
+
+get_std_between_seed_results(
+    conc_res_df=conc_res_df,
+    #model_results='VAR',
+    output_csv_path=output_csv_path
+)

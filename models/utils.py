@@ -32,12 +32,26 @@ def split_dataset(dataset, train_ratio: int = 0.8):
     return train_dataset, test_dataset
 
 
+def obtain_config_dict(config_str: str):
+    config = config_str.strip("{}")
+    config = [x.split(": ") for x in config.split(", '")]
+    config = [(x[0].replace("'", ''), x[1]) for x in config]
+    config = dict(config)
+    config["model_class"] = str(config["model_class"]).split(
+                '.'
+            )[-1].replace("'>", "")
+    lag_fh = config['lag_forecast']
+    lag_fh = lag_fh.replace("'", "")
+    lag_forecast = lag_fh.split(",")
+    lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
+    config["lag"] = lag_forecast[0]
+    config["forecast_horizon"] = lag_forecast[1]
+    return config
+
+
 def normalize_config(config_str: str, remove_key_str: list):
     try:
-        config = config_str.strip("{}")
-        config = [x.split(": ") for x in config.split(", '")]
-        config = [(x[0].replace("'", ''), x[1]) for x in config]
-        config = dict(config)
+        config = obtain_config_dict(config_str)
         for key in remove_key_str:
             config.pop(key, None)
         str_config = str(config)
@@ -66,26 +80,59 @@ def average_results(
     if not file_list:
         raise ValueError("No CSV files found in directory")
 
-    conc_df = pd.concat(
-        [pd.read_csv(f) for f in file_list],
-        ignore_index=True
-    )
+    #conc_df = pd.concat(
+    #    [pd.read_csv(f) for f in file_list],
+    #    ignore_index=True
+    #)
+
+    df_list = []
+    for f in file_list:
+        df = pd.read_csv(f)
+
+        df['source_file'] = os.path.basename(f)
+        try:
+            df['config'] = df['config'].apply(obtain_config_dict)
+            config_df = pd.json_normalize(df['config'])
+            df = pd.concat(
+                [df.drop('config', axis=1), config_df], axis=1
+            )
+        except KeyError:
+            pass
+
+        df_list.append(df)
+
+    conc_df = pd.concat(df_list, ignore_index=True)
 
     if model_results == 'Linear':
-        remove_keys = ['random_seed', 'cap_data']
-        conc_df['normalized_config'] = conc_df['config'].apply(
-            lambda x: normalize_config(x, remove_keys)
-        )
+        #remove_keys = ['random_seed', 'cap_data']
+        #conc_df['normalized_config'] = conc_df['config'].apply(
+        #    lambda x: normalize_config(x, remove_keys)
+        #)
 
-        grouped_df = conc_df.groupby('normalized_config').agg({
+        for col in ['lag', 'forecast_horizon', 'batch_size', 'lr']:
+            conc_df[col] = pd.to_numeric(conc_df[col], errors='coerce')
+
+        grouped_df = conc_df.groupby([
+            'model_class',
+            'lag',
+            'forecast_horizon',
+            'batch_size',
+            'lr',
+            #'dir_source',
+            #'optimizer',
+            #'epochs',
+            #'shuffle',
+            #'checkpoint_freq',
+            #'num_features',
+        ]).agg({
             'r2': 'mean',
             'mse': 'mean',
             'mae': 'mean',
         }).reset_index()
 
-        grouped_df = grouped_df.rename(
-            columns={'normalized_config': 'config'}
-        )
+        #grouped_df = grouped_df.rename(
+        #    columns={'normalized_config': 'config'}
+        #)
     else:
         grouped_df = conc_df.groupby('config').agg({
             'r2': 'mean',
@@ -107,21 +154,37 @@ def get_best_results(
     df_list = []
     for f in file_list:
         df = pd.read_csv(f)
+
         df['source_file'] = os.path.basename(f)
+        try:
+            df['config'] = df['config'].apply(obtain_config_dict)
+            config_df = pd.json_normalize(df['config'])
+            df = pd.concat(
+                [df.drop('config', axis=1), config_df], axis=1
+            )
+        except KeyError:
+            pass
+
         df_list.append(df)
 
     conc_df = pd.concat(df_list, ignore_index=True)
 
     if model_results == 'Linear':
-        remove_keys = [
-            'random_seed', 'cap_data', 'batch_size', 'lr',
-            'dir_source', 'optimizer', 'epochs', 'shuffle',
-            'checkpoint_freq', 'num_features'
-        ]
-        conc_df['normalized_config'] = conc_df['config'].apply(
-            lambda x: normalize_config(x, remove_keys)
-        )
-        best_idx = conc_df.groupby('normalized_config')['mse'].idxmin()
+        #remove_keys = [
+        #    'random_seed', 'cap_data', 'batch_size', 'lr',
+        #    'dir_source', 'optimizer', 'epochs', 'shuffle',
+        #    'checkpoint_freq', 'num_features'
+        #]
+        #conc_df['normalized_config'] = conc_df['config'].apply(
+        #    lambda x: normalize_config(x, remove_keys)
+        #)
+        #best_idx = conc_df.groupby('normalized_config')['mse'].idxmin()            
+        for col in ['lag', 'forecast_horizon', 'batch_size', 'lr']:
+            conc_df[col] = pd.to_numeric(conc_df[col], errors='coerce')
+        
+        best_idx = conc_df.groupby(
+            ['model_class', 'lag', 'forecast_horizon']
+        )['mse'].idxmin()
     else:
         best_idx = conc_df.groupby('config')['mse'].idxmin()
 
@@ -266,10 +329,13 @@ def postprocess_data(
             original_std
         )
 
-        denorm_df = denorm_df.rename({
-            'wind_speed': 'original_wind_speed',
-            'wind_direction': 'original_wind_direction'
-        })
+        #denorm_df = denorm_df.rename({
+        #    'wind_speed': 'original_wind_speed',
+        #    'wind_direction': 'original_wind_direction'
+        #})
+
+        denorm_df["original_wind_speed"] = denorm_df["wind_speed"]
+        denorm_df["original_wind_direction"] = denorm_df["wind_direction"]
 
         denorm_df["wind_speed"] = denorm_df.apply(
             lambda row: compute_wind_speed(
@@ -313,19 +379,17 @@ def obtain_pred_vs_trues_best_models(
 
     for idx, row in best_results_df.iterrows():
         if model == 'Linear':
-            config = row["config"].strip("{}")
-            config = [x.split(": ") for x in config.split(", '")]
-            config = [(x[0].replace("'", ''), x[1]) for x in config]
-            config = dict(config)
+            try:
+                config = obtain_config_dict(row["config"])
+            except KeyError:
+                config = row
 
             seed = config["random_seed"]
-            model_name = str(config["model_class"]).split(
-                '.'
-            )[-1].replace("'>", "")
-            lag_forecast = config["lag_forecast"].split(",")
-            lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
-            lag = lag_forecast[0]
-            fh = lag_forecast[1]
+            seed = "None" if pd.isna(seed) else str(int(seed)) if isinstance(seed, float) else str(seed)
+
+            model_name = config["model_class"]
+            lag = config["lag"]
+            fh = config["forecast_horizon"]
             batch_size = config["batch_size"]
             lr = config["lr"]
 
@@ -348,6 +412,7 @@ def obtain_pred_vs_trues_best_models(
             #print(f"Going to put results in dir {dir_output}")
 
         elif model == 'VAR':
+            model_name = 'VAR'
             config = row["config"]
             lag_forecast = config.split(",")
             lag_forecast = [
@@ -380,8 +445,6 @@ def obtain_pred_vs_trues_best_models(
 
         #print(f"File path source: {file_path}")
         #print(f"Trues pred df:\n{trues_pred_df}")
-        print(f"Dir output: {dir_output}")
-        print(f"Model {model}, lag {lag}, forecast {fh}")
         postprocess_data(
             trues_pred_df,
             dir_original_source,
@@ -396,10 +459,23 @@ def concatenate_all_seeds_results(results_dir: str, output_csv_path: str = None)
     if not file_list:
         raise ValueError("No CSV files found in directory")
 
-    conc_df = pd.concat(
-        [pd.read_csv(f) for f in file_list],
-        ignore_index=True
-    )
+    df_list = []
+    for f in file_list:
+        df = pd.read_csv(f)
+
+        df['source_file'] = os.path.basename(f)
+        try:
+            df['config'] = df['config'].apply(obtain_config_dict)
+            config_df = pd.json_normalize(df['config'])
+            df = pd.concat(
+                [df.drop('config', axis=1), config_df], axis=1
+            )
+        except KeyError:
+            pass
+
+        df_list.append(df)
+
+    conc_df = pd.concat(df_list, ignore_index=True)
 
     if output_csv_path is not None:
         conc_df.to_csv(output_csv_path, index=False)
@@ -413,20 +489,35 @@ def get_std_between_seed_results(
         model_results: str = 'Linear'
 ):
     if model_results == 'Linear':
-        remove_keys = ['random_seed', 'cap_data']
-        conc_res_df['normalized_config'] = conc_res_df['config'].apply(
-            lambda x: normalize_config(x, remove_keys)
-        )
+        #remove_keys = ['random_seed', 'cap_data']
+        #conc_res_df['normalized_config'] = conc_res_df['config'].apply(
+        #    lambda x: normalize_config(x, remove_keys)
+        #)
+        for col in ['lag', 'forecast_horizon', 'batch_size', 'lr']:
+            conc_res_df[col] = pd.to_numeric(conc_res_df[col], errors='coerce')
 
-        grouped_df = conc_res_df.groupby('normalized_config').agg({
+
+        grouped_df = conc_res_df.groupby([
+            'model_class',
+            'lag',
+            'forecast_horizon',
+            'batch_size',
+            'lr',
+            #'dir_source',
+            #'optimizer',
+            #'epochs',
+            #'shuffle',
+            #'checkpoint_freq',
+            #'num_features',
+        ]).agg({
             'r2': 'std',
             'mse': 'std',
             'mae': 'std',
         }).reset_index()
 
-        grouped_df = grouped_df.rename(
-            columns={'normalized_config': 'config'}
-        )
+        #grouped_df = grouped_df.rename(
+        #    columns={'normalized_config': 'config'}
+        #)
     else:
         grouped_df = conc_res_df.groupby('config').agg({
             'r2': 'std',

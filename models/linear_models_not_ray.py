@@ -1,5 +1,4 @@
 import os
-import tempfile
 from itertools import product
 
 import numpy as np
@@ -85,11 +84,7 @@ def train_linear_model(
 
     net = model_class(input_size=input_size, output_size=output_size)
 
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda:0"
-        if torch.cuda.device_count() > 1:
-            net = nn.DataParallel(net)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(device)
     logger.info(f"Using device: {device}")
 
@@ -113,7 +108,10 @@ def train_linear_model(
         train_dataset,
         batch_size=config["batch_size"],
         shuffle=config["shuffle"],
-        collate_fn=custom_collate_fn
+        collate_fn=custom_collate_fn,
+        num_workers=8,          # Use multiple workers for data loading
+        pin_memory=True,        # Faster data transfer to GPU
+        persistent_workers=True # Keep workers alive between epochs
     )
 
     history = {
@@ -188,11 +186,7 @@ def evaluate_linear_model(
     lag, forecast_horizon = config["lag_forecast"]
     model_name = str(config["model_class"]).split('.')[-1].replace("'>", "")
 
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda:0"
-        if torch.cuda.device_count() > 1:
-            model = nn.DataParallel(model)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     logger.info(f"Using device: {device}")
 
@@ -207,7 +201,9 @@ def evaluate_linear_model(
         test_dataset,
         batch_size=config["batch_size"],
         shuffle=config["shuffle"],
-        collate_fn=custom_collate_fn
+        collate_fn=custom_collate_fn,
+        num_workers=8,
+        pin_memory=True,
     )
 
     model.eval()
@@ -249,18 +245,6 @@ def evaluate_linear_model(
         "file_name": flat_metadata[:, 5],
     })
 
-    #batch_size = config["batch_size"]
-    #lr = config["lr"]
-    #output_path = os.path.join(
-    #    output_dir, f"model_{model_name}"
-    #)
-    #output_path = os.path.join(
-    #    output_path, f"lag{lag}_fh{forecast_horizon}"
-    #)
-    #output_path = os.path.join(
-    #    output_path, f"batch_size{batch_size}_lr{lr}"
-    #)
-    #os.makedirs(output_path, exist_ok=True)
     output_path = os.path.join(output_dir, "trues_pred_results.csv")
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df.to_csv(output_path, index=False)
@@ -313,7 +297,6 @@ def save_loss_plots(
     plt.close()
 
 
-
 def run_experiments(
     search_space: dict,
     output_base_dir: str,
@@ -326,7 +309,7 @@ def run_experiments(
         seed_results = []
         logger.info(f"Started execution with seed: {seed}")
 
-        seed_dir = os.path.join(output_base_dir, f"seed_{seed}")
+        seed_dir = os.path.join(output_base_dir, f"seed{seed}")
         os.makedirs(seed_dir, exist_ok=True)
 
         param_names = []
@@ -351,7 +334,7 @@ def run_experiments(
             lr = config["lr"]
 
             exp_dir = os.path.join(
-                seed_dir, model_name
+                seed_dir, f"model_{model_name}"
             )
             exp_dir = os.path.join(
                 exp_dir,
@@ -360,10 +343,6 @@ def run_experiments(
             exp_dir = os.path.join(
                 exp_dir, f"batch_size{bs}_lr{lr}"
             )
-            #exp_dir = os.path.join(
-            #    seed_dir,
-            #    f"{model_name}_lag{lag}_fh{fh}_bs{bs}_lr{lr}"
-            #)
             os.makedirs(exp_dir, exist_ok=True)
 
             model, history = train_linear_model(

@@ -3,6 +3,8 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from .utils import obtain_config_dict
+
 
 def get_config(row):
     config = row["config"]
@@ -50,11 +52,14 @@ def get_learning_rate(row):
 
 
 def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse'):
-    dataframe["lag"] = dataframe.apply(get_lag, axis=1)
-    dataframe["forecast_horizon"] = dataframe.apply(get_forecast_horizon, axis=1)
-    dataframe["model_class"] = dataframe.apply(get_model_class, axis=1)
-    dataframe["batch_size"] = dataframe.apply(get_batch_size, axis=1)
-    dataframe["lr"] = dataframe.apply(get_learning_rate, axis=1)
+    try:
+        dataframe["lag"] = dataframe.apply(get_lag, axis=1)
+        dataframe["forecast_horizon"] = dataframe.apply(get_forecast_horizon, axis=1)
+        dataframe["model_class"] = dataframe.apply(get_model_class, axis=1)
+        dataframe["batch_size"] = dataframe.apply(get_batch_size, axis=1)
+        dataframe["lr"] = dataframe.apply(get_learning_rate, axis=1)
+    except KeyError:
+        pass
 
     grouped_df = dataframe.loc[
         dataframe.groupby(
@@ -159,28 +164,24 @@ def plot_best_linear_results(
 def get_all_linear_results_separated(dataframe: pd.DataFrame):
     results_info = {}
 
-    for config, r2, mae, mse in zip(
-        dataframe['config'], dataframe['r2'],
+    try:
+        dataframe['config'] = dataframe['config'].apply(obtain_config_dict)
+        config_df = pd.json_normalize(dataframe['config'])
+        dataframe = pd.concat(
+            [dataframe.drop('config', axis=1), config_df], axis=1
+        )
+    except KeyError:
+        pass
+
+    for (
+        forecast_horizon, batch_size, lr,
+        lag, model_class, r2, mae, mse
+    ) in zip(
+        dataframe['forecast_horizon'], dataframe['batch_size'],
+        dataframe['lr'], dataframe['lag'],
+        dataframe['model_class'], dataframe['r2'],
         dataframe['mae'], dataframe['mse']
     ):
-        config = config.strip("{}")
-        config = [x.split(": ") for x in config.split(", '")]
-        config = [(x[0].replace("'", ''), x[1]) for x in config]
-        config = dict(config)
-
-        model_class = str(config["model_class"]).split(
-            '.'
-        )[-1].replace("'>", "")
-        batch_size = config["batch_size"]
-        lr = config["lr"]
-
-        lag_fh = config['lag_forecast']
-        lag_fh = lag_fh.replace("'", "")
-        lag_forecast = lag_fh.split(",")
-        lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
-        lag = lag_forecast[0]
-        forecast_horizon = lag_forecast[1]
-
         results_info.setdefault(batch_size, {})
         results_info[batch_size].setdefault(lr, {})
         results_info[batch_size][lr].setdefault(forecast_horizon, {})
@@ -248,28 +249,24 @@ def plot_all_linear_results_separated(
 def get_all_linear_results_joined(dataframe: pd.DataFrame):
     results_info = {}
 
-    for config, r2, mae, mse in zip(
-        dataframe['config'], dataframe['r2'],
+    try:
+        dataframe['config'] = dataframe['config'].apply(obtain_config_dict)
+        config_df = pd.json_normalize(dataframe['config'])
+        dataframe = pd.concat(
+            [dataframe.drop('config', axis=1), config_df], axis=1
+        )
+    except KeyError:
+        pass
+
+    for (
+        forecast_horizon, batch_size, lr,
+        lag, model_class, r2, mae, mse
+    ) in zip(
+        dataframe['forecast_horizon'], dataframe['batch_size'],
+        dataframe['lr'], dataframe['lag'],
+        dataframe['model_class'], dataframe['r2'],
         dataframe['mae'], dataframe['mse']
     ):
-        config = config.strip("{}")
-        config = [x.split(": ") for x in config.split(", '")]
-        config = [(x[0].replace("'", ''), x[1]) for x in config]
-        config = dict(config)
-
-        model_class = str(config["model_class"]).split(
-            '.'
-        )[-1].replace("'>", "")
-        batch_size = config["batch_size"]
-        lr = config["lr"]
-
-        lag_fh = config['lag_forecast']
-        lag_fh = lag_fh.replace("'", "")
-        lag_forecast = lag_fh.split(",")
-        lag_forecast = [value.strip("[] ").strip() for value in lag_forecast]
-        lag = lag_forecast[0]
-        forecast_horizon = lag_forecast[1]
-
         results_info.setdefault(forecast_horizon, {})
         results_info[forecast_horizon].setdefault(batch_size, {})
         results_info[forecast_horizon][batch_size].setdefault(lr, {})
@@ -339,8 +336,8 @@ def get_all_var_results(dataframe: pd.DataFrame):
     ):
         lag_forecast = lag_forecast.split(",")
         lag_forecast = [value.strip("() ").strip() for value in lag_forecast]
-        lag = lag_forecast[0]
-        forecast_horizon = lag_forecast[1]
+        lag = int(lag_forecast[0])
+        forecast_horizon = int(lag_forecast[1])
         results_info.setdefault(forecast_horizon, {})
         results_info[forecast_horizon].setdefault(lag, {})
         results_info[forecast_horizon][lag].setdefault(model_class, {})
@@ -433,11 +430,18 @@ def plot_linear_and_var_results(
     results_linear = get_best_linear_results(dataframe_linear)
     results_var = get_all_var_results(dataframe_var)
 
+    print(f"Results linear: {results_linear}")
+    print(f"Results var: {results_var}")
+
     os.makedirs(base_dir_out, exist_ok=True)
 
     linestyle_map = {"r2": ":", "mae": "--", "mse": "-"}
 
     for lr, vr in zip(sorted(results_linear), sorted(results_var)):
+
+        print(f"LR: {lr}")
+        print(f"VR: {vr}")
+        
         lr_res = results_linear[lr]
         vr_res = results_var[vr]
 
@@ -469,13 +473,13 @@ def plot_linear_and_var_results(
         plt.clf()
 
 
-"""
+
 base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
 results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
 )
-#results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/testing_results_seed0.csv"
+results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
+#results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/testing_results_seedNone.csv"
 
 df_linear = pd.read_csv(results_path)
 
@@ -484,13 +488,12 @@ plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
 plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
 plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
 plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-"""
 
 results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone/AllResults/"
-    "testing_results_seedNone.csv"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/AllResults/"
+    "results_averaged.csv"
 )
 df_var = pd.read_csv(results_path)
 
@@ -498,26 +501,43 @@ base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/plots/testing_results/var_model/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seedNone"
+    "(12,6),(12,9)]"
 )
-plot_all_var_results(df_var, base_dir_out)
-
+#plot_all_var_results(df_var, base_dir_out)
 
 base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
 )
-#plot_linear_and_var_results(df_linear, df_var, base_dir_out)
+plot_linear_and_var_results(df_linear, df_var, base_dir_out)
 
 
 
+
+
+
+
+base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
+results_suffix = (
+    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+)
+results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
+#results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/testing_results_seedNone.csv"
+
+df_linear = pd.read_csv(results_path)
+
+plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
+
+#plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
+#plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
+#plot_best_linear_results(df_linear, f"{plot_base}/best_results")
 
 results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone/AllResults/"
-    "testing_results_seedNone.csv"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
+    "results_averaged.csv"
 )
 df_var = pd.read_csv(results_path)
 
@@ -525,13 +545,18 @@ base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/plots/testing_results/var_model/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_seedNone"
+    "(12,6),(12,9)]_capped_data"
 )
-plot_all_var_results(df_var, base_dir_out)
-
+#plot_all_var_results(df_var, base_dir_out)
 
 base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
 )
+
+print(f"DF LINEAR:\n{df_linear}")
+print(f"DF VAR:\n{df_var}")
+
+plot_linear_and_var_results(df_linear, df_var, base_dir_out)
+
