@@ -80,68 +80,68 @@ def average_results(
     if not file_list:
         raise ValueError("No CSV files found in directory")
 
-    #conc_df = pd.concat(
-    #    [pd.read_csv(f) for f in file_list],
-    #    ignore_index=True
-    #)
-
-    df_list = []
-    for f in file_list:
-        df = pd.read_csv(f)
-
-        df['source_file'] = os.path.basename(f)
-        try:
-            df['config'] = df['config'].apply(obtain_config_dict)
-            config_df = pd.json_normalize(df['config'])
-            df = pd.concat(
-                [df.drop('config', axis=1), config_df], axis=1
-            )
-        except KeyError:
-            pass
-
-        df_list.append(df)
-
-    conc_df = pd.concat(df_list, ignore_index=True)
-
     if model_results == 'Linear':
-        #remove_keys = ['random_seed', 'cap_data']
-        #conc_df['normalized_config'] = conc_df['config'].apply(
-        #    lambda x: normalize_config(x, remove_keys)
-        #)
+        df_list = []
+        for f in file_list:
+            df = pd.read_csv(f)
+
+            df['source_file'] = os.path.basename(f)
+            try:
+                df['config'] = df['config'].apply(obtain_config_dict)
+                config_df = pd.json_normalize(df['config'])
+                df = pd.concat(
+                    [df.drop('config', axis=1), config_df], axis=1
+                )
+            except KeyError:
+                pass
+
+            df_list.append(df)
+
+        conc_df = pd.concat(df_list, ignore_index=True)
 
         for col in ['lag', 'forecast_horizon', 'batch_size', 'lr']:
             conc_df[col] = pd.to_numeric(conc_df[col], errors='coerce')
 
-        grouped_df = conc_df.groupby([
+        grouped = conc_df.groupby([
             'model_class',
             'lag',
             'forecast_horizon',
             'batch_size',
             'lr',
-            #'dir_source',
-            #'optimizer',
-            #'epochs',
-            #'shuffle',
-            #'checkpoint_freq',
-            #'num_features',
-        ]).agg({
-            'r2': 'mean',
-            'mse': 'mean',
-            'mae': 'mean',
-        }).reset_index()
+        ]).agg(
+            r2_mean=('r2', 'mean'),
+            r2_std=('r2', 'std'),
+            mse_mean=('mse', 'mean'),
+            mse_std=('mse', 'std'),
+            mae_mean=('mae', 'mean'),
+            mae_std=('mae', 'std')
+        ).reset_index()
 
-        #grouped_df = grouped_df.rename(
-        #    columns={'normalized_config': 'config'}
-        #)
+        grouped['r2_cv_percent'] = (grouped['r2_std'] / grouped['r2_mean']) * 100
+        grouped['mse_cv_percent'] = (grouped['mse_std'] / grouped['mse_mean']) * 100
+        grouped['mae_cv_percent'] = (grouped['mae_std'] / grouped['mae_mean']) * 100
+
     else:
-        grouped_df = conc_df.groupby('config').agg({
-            'r2': 'mean',
-            'mse': 'mean',
-            'mae': 'mean',
-        }).reset_index()
+        conc_df = pd.concat(
+            [pd.read_csv(f) for f in file_list],
+            ignore_index=True
+        )
 
-    grouped_df.to_csv(output_csv_path, index=False)
-    return grouped_df
+        grouped = conc_df.groupby('config').agg(
+            r2_mean=('r2', 'mean'),
+            r2_std=('r2', 'std'),
+            mse_mean=('mse', 'mean'),
+            mse_std=('mse', 'std'),
+            mae_mean=('mae', 'mean'),
+            mae_std=('mae', 'std')
+        ).reset_index()
+
+        grouped['r2_cv_percent'] = (grouped['r2_std'] / grouped['r2_mean']) * 100
+        grouped['mse_cv_percent'] = (grouped['mse_std'] / grouped['mse_mean']) * 100
+        grouped['mae_cv_percent'] = (grouped['mae_std'] / grouped['mae_mean']) * 100
+
+    grouped.to_csv(output_csv_path, index=False)
+    return grouped
 
 
 def get_best_results(
@@ -170,15 +170,6 @@ def get_best_results(
     conc_df = pd.concat(df_list, ignore_index=True)
 
     if model_results == 'Linear':
-        #remove_keys = [
-        #    'random_seed', 'cap_data', 'batch_size', 'lr',
-        #    'dir_source', 'optimizer', 'epochs', 'shuffle',
-        #    'checkpoint_freq', 'num_features'
-        #]
-        #conc_df['normalized_config'] = conc_df['config'].apply(
-        #    lambda x: normalize_config(x, remove_keys)
-        #)
-        #best_idx = conc_df.groupby('normalized_config')['mse'].idxmin()            
         for col in ['lag', 'forecast_horizon', 'batch_size', 'lr']:
             conc_df[col] = pd.to_numeric(conc_df[col], errors='coerce')
         
@@ -296,7 +287,6 @@ def postprocess_data(
             row["file_name"]
         ), axis=1
     )
-    #print(f"New DF:\n{df}")
 
     agg_dict = {col: "mean" for col in mean_cols}
     agg_dict.update({col: "first" for col in constant_cols})
@@ -328,11 +318,6 @@ def postprocess_data(
             original_mean,
             original_std
         )
-
-        #denorm_df = denorm_df.rename({
-        #    'wind_speed': 'original_wind_speed',
-        #    'wind_direction': 'original_wind_direction'
-        #})
 
         denorm_df["original_wind_speed"] = denorm_df["wind_speed"]
         denorm_df["original_wind_direction"] = denorm_df["wind_direction"]
@@ -400,16 +385,11 @@ def obtain_pred_vs_trues_best_models(
             file_path = os.path.join(base_results_path, file_path)
             trues_pred_df = pd.read_csv(file_path)
 
-            #print(f"Processing {file_path}")
-            #print(f"Df obtained:\n{trues_pred_df}")
-
             file_output = (
                 f"seed{seed}_model{model_name}_lag{lag}_fh{fh}_"
                 f"batch_size{batch_size}_lr{lr}"
             )
             dir_output = os.path.join(base_dir_output, file_output)
-
-            #print(f"Going to put results in dir {dir_output}")
 
         elif model == 'VAR':
             model_name = 'VAR'
@@ -434,17 +414,9 @@ def obtain_pred_vs_trues_best_models(
             file_path = os.path.join(base_results_path, file_path)
             trues_pred_df = pd.read_csv(file_path)
 
-            #print(f"Processing {file_path}")
-            #print(f"Df obtained:\n{trues_pred_df}")
-
             file_output = (f"{seed}_model_VAR_lag{lag}_fh{fh}")
             dir_output = os.path.join(base_dir_output, file_output)
 
-            #print(f"Going to put results in dir {dir_output}")
-
-
-        #print(f"File path source: {file_path}")
-        #print(f"Trues pred df:\n{trues_pred_df}")
         postprocess_data(
             trues_pred_df,
             dir_original_source,
@@ -481,52 +453,6 @@ def concatenate_all_seeds_results(results_dir: str, output_csv_path: str = None)
         conc_df.to_csv(output_csv_path, index=False)
 
     return conc_df
-
-
-def get_std_between_seed_results(
-        conc_res_df: pd.DataFrame,
-        output_csv_path: str,
-        model_results: str = 'Linear'
-):
-    if model_results == 'Linear':
-        #remove_keys = ['random_seed', 'cap_data']
-        #conc_res_df['normalized_config'] = conc_res_df['config'].apply(
-        #    lambda x: normalize_config(x, remove_keys)
-        #)
-        for col in ['lag', 'forecast_horizon', 'batch_size', 'lr']:
-            conc_res_df[col] = pd.to_numeric(conc_res_df[col], errors='coerce')
-
-
-        grouped_df = conc_res_df.groupby([
-            'model_class',
-            'lag',
-            'forecast_horizon',
-            'batch_size',
-            'lr',
-            #'dir_source',
-            #'optimizer',
-            #'epochs',
-            #'shuffle',
-            #'checkpoint_freq',
-            #'num_features',
-        ]).agg({
-            'r2': 'std',
-            'mse': 'std',
-            'mae': 'std',
-        }).reset_index()
-
-        #grouped_df = grouped_df.rename(
-        #    columns={'normalized_config': 'config'}
-        #)
-    else:
-        grouped_df = conc_res_df.groupby('config').agg({
-            'r2': 'std',
-            'mse': 'std',
-            'mae': 'std',
-        }).reset_index()
-
-    grouped_df.to_csv(output_csv_path, index=False)
-    return grouped_df
 
 
 def get_num_timesteps(dir_source: str, output_file: str):

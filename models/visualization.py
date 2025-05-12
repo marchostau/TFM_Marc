@@ -51,6 +51,72 @@ def get_learning_rate(row):
     return config["lr"]
 
 
+def plot_comparison_best_results(uncapped_df, capped_df, base_dir_out, metrics_to_include=["mse"], show_plot=False):
+    # Get best results from both datasets
+    uncapped_results = get_best_linear_results(uncapped_df)
+    capped_results = get_best_linear_results(capped_df)
+    
+    # Plot comparison for each forecast horizon
+    for forecast_horizon in uncapped_results.keys():
+        if forecast_horizon not in capped_results:
+            continue
+            
+        plt.figure(figsize=(14, 8))
+        
+        # Plot uncapped results
+        uncapped_lag_data = uncapped_results[forecast_horizon]
+        ordered_uncapped = dict(sorted(uncapped_lag_data.items(), key=lambda item: int(item[0])))
+        lags = list(ordered_uncapped.keys())
+        
+        model_classes = list(next(iter(ordered_uncapped.values())).keys())
+        
+        for model_class in sorted(model_classes):
+            if "r2" in metrics_to_include:
+                r2_values = [ordered_uncapped[lag][model_class]["r2"] for lag in lags]
+                plt.plot(lags, r2_values, label=f"Uncapped {model_class} - R2", linestyle=":", marker='o')
+            
+            if "mae" in metrics_to_include:
+                mae_values = [ordered_uncapped[lag][model_class]["mae"] for lag in lags]
+                plt.plot(lags, mae_values, label=f"Uncapped {model_class} - MAE", linestyle="--", marker='o')
+            
+            if "mse" in metrics_to_include:
+                mse_values = [ordered_uncapped[lag][model_class]["mse"] for lag in lags]
+                plt.plot(lags, mse_values, label=f"Uncapped {model_class} - MSE", linestyle="-", marker='o')
+        
+        # Plot capped results
+        capped_lag_data = capped_results[forecast_horizon]
+        ordered_capped = dict(sorted(capped_lag_data.items(), key=lambda item: int(item[0])))
+        
+        for model_class in sorted(model_classes):
+            if "r2" in metrics_to_include:
+                r2_values = [ordered_capped[lag][model_class]["r2"] for lag in lags]
+                plt.plot(lags, r2_values, label=f"Capped {model_class} - R2", linestyle=":", marker='x')
+            
+            if "mae" in metrics_to_include:
+                mae_values = [ordered_capped[lag][model_class]["mae"] for lag in lags]
+                plt.plot(lags, mae_values, label=f"Capped {model_class} - MAE", linestyle="--", marker='x')
+            
+            if "mse" in metrics_to_include:
+                mse_values = [ordered_capped[lag][model_class]["mse"] for lag in lags]
+                plt.plot(lags, mse_values, label=f"Capped {model_class} - MSE", linestyle="-", marker='x')
+        
+        plt.title(f"Forecast Horizon: {forecast_horizon} - Capped vs Uncapped Comparison")
+        plt.xlabel("Lag")
+        plt.ylabel("Metrics")
+        plt.legend(title="Data Type, Model Class and Metric")
+        plt.grid(True)
+        plt.tight_layout()
+        
+        if not os.path.exists(base_dir_out):
+            os.makedirs(base_dir_out)
+        
+        plt.savefig(f"{base_dir_out}/comparison_fh{forecast_horizon}_results.png")
+        if show_plot:
+            plt.show()
+        
+        plt.clf()
+
+
 def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse'):
     try:
         dataframe["lag"] = dataframe.apply(get_lag, axis=1)
@@ -330,9 +396,10 @@ def plot_all_linear_results_joined(
 def get_all_var_results(dataframe: pd.DataFrame):
     results_info = {}
     model_class = "var"
+
     for r2, mse, mae, lag_forecast in zip(
       dataframe['r2'], dataframe['mse'],
-      dataframe["mae"], dataframe['config']  
+      dataframe["mae"], dataframe['config']
     ):
         lag_forecast = lag_forecast.split(",")
         lag_forecast = [value.strip("() ").strip() for value in lag_forecast]
@@ -347,6 +414,72 @@ def get_all_var_results(dataframe: pd.DataFrame):
             "mse": mse,
         }
     return results_info
+
+
+def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to_include=["mse"], show_plot=False):
+    # Get results from both datasets
+    uncapped_results = get_all_var_results(uncapped_df)
+    capped_results = get_all_var_results(capped_df)
+    
+    # Plot comparison for each forecast horizon
+    for forecast_horizon in uncapped_results.keys():
+        if forecast_horizon not in capped_results:
+            continue
+            
+        plt.figure(figsize=(14, 8))
+        
+        # Plot uncapped results
+        uncapped_lag_data = uncapped_results[forecast_horizon]
+        ordered_uncapped = dict(sorted(uncapped_lag_data.items(), key=lambda item: int(item[0])))
+        lags = list(ordered_uncapped.keys())
+        
+        model_classes = list(next(iter(ordered_uncapped.values())).keys())
+        
+        for model_class in sorted(model_classes):
+            if "r2" in metrics_to_include:
+                r2_values = [ordered_uncapped[lag][model_class]["r2"] for lag in lags]
+                plt.plot(lags, r2_values, label=f"Uncapped {model_class} - R2", linestyle=":", marker='o')
+            
+            if "mae" in metrics_to_include:
+                mae_values = [ordered_uncapped[lag][model_class]["mae"] for lag in lags]
+                plt.plot(lags, mae_values, label=f"Uncapped {model_class} - MAE", linestyle="--", marker='o')
+            
+            if "mse" in metrics_to_include:
+                mse_values = [ordered_uncapped[lag][model_class]["mse"] for lag in lags]
+                plt.plot(lags, mse_values, label=f"Uncapped {model_class} - MSE", linestyle="-", marker='o')
+        
+        # Plot capped results
+        capped_lag_data = capped_results[forecast_horizon]
+        ordered_capped = dict(sorted(capped_lag_data.items(), key=lambda item: int(item[0])))
+        
+        for model_class in sorted(model_classes):
+            if "r2" in metrics_to_include:
+                r2_values = [ordered_capped[lag][model_class]["r2"] for lag in lags]
+                plt.plot(lags, r2_values, label=f"Capped {model_class} - R2", linestyle=":", marker='x')
+            
+            if "mae" in metrics_to_include:
+                mae_values = [ordered_capped[lag][model_class]["mae"] for lag in lags]
+                plt.plot(lags, mae_values, label=f"Capped {model_class} - MAE", linestyle="--", marker='x')
+            
+            if "mse" in metrics_to_include:
+                mse_values = [ordered_capped[lag][model_class]["mse"] for lag in lags]
+                plt.plot(lags, mse_values, label=f"Capped {model_class} - MSE", linestyle="-", marker='x')
+        
+        plt.title(f"VAR Model - Forecast Horizon: {forecast_horizon} - Capped vs Uncapped Comparison")
+        plt.xlabel("Lag")
+        plt.ylabel("Metrics")
+        plt.legend(title="Data Type, Model Class and Metric")
+        plt.grid(True)
+        plt.tight_layout()
+        
+        if not os.path.exists(base_dir_out):
+            os.makedirs(base_dir_out)
+        
+        plt.savefig(f"{base_dir_out}/var_comparison_fh{forecast_horizon}_results.png")
+        if show_plot:
+            plt.show()
+        
+        plt.clf()
 
 
 def plot_all_var_results(
@@ -473,7 +606,7 @@ def plot_linear_and_var_results(
         plt.clf()
 
 
-
+"""
 base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
 results_suffix = (
     "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
@@ -512,51 +645,54 @@ base_dir_out = (
 )
 plot_linear_and_var_results(df_linear, df_var, base_dir_out)
 
+"""
 
+base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
 
+# Uncapped data
+uncapped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/results_averaged.csv"
+df_uncapped = pd.read_csv(uncapped_path)
 
+# Capped data
+capped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+capped_path = f"{base_dir}/evaluate_results/linear_models/{capped_suffix}/AllResults/results_averaged.csv"
+df_capped = pd.read_csv(capped_path)
 
+base_dir_out = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "plots/testing_results/linear_models/results[((3,3),(6,6),(9,9),"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_cappedVSuncapped"
+)
+
+plot_comparison_best_results(
+    df_uncapped,
+    df_capped,
+    base_dir_out,
+    metrics_to_include=["mse"]
+)
 
 
 base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-#results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/testing_results_seedNone.csv"
 
-df_linear = pd.read_csv(results_path)
+# Uncapped VAR data
+uncapped_var_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+uncapped_var_path = f"{base_dir}/evaluate_results/var_model/{uncapped_var_suffix}/AllResults/results_averaged.csv"
+df_var_uncapped = pd.read_csv(uncapped_var_path)
 
-plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
-
-#plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
-#plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
-#plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
-    "results_averaged.csv"
-)
-df_var = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/plots/testing_results/var_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data"
-)
-#plot_all_var_results(df_var, base_dir_out)
+# Capped VAR data
+capped_var_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+capped_var_path = f"{base_dir}/evaluate_results/var_model/{capped_var_suffix}/AllResults/results_averaged.csv"
+df_var_capped = pd.read_csv(capped_var_path)
 
 base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+    "plots/testing_results/var_model/results[((3,3),(6,6),(9,9),"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_cappedVSuncapped"
 )
 
-print(f"DF LINEAR:\n{df_linear}")
-print(f"DF VAR:\n{df_var}")
-
-plot_linear_and_var_results(df_linear, df_var, base_dir_out)
-
+plot_var_comparison_results(
+    df_var_uncapped,
+    df_var_capped,
+    base_dir_out
+)

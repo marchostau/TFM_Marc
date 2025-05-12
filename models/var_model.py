@@ -296,36 +296,35 @@ results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seedNone/AllResults"
+    "/AllResults"
 )
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seedNone/AllResults/results_averaged.csv"
+    "/AllResults/results_averaged.csv"
 )
-#average_results(results_dir, output_csv_path, 'VAR')
+average_results(results_dir, output_csv_path, 'VAR')
 
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seedNone/AllResults/best_results.csv"
+    "/AllResults/best_results.csv"
 )
-get_best_results(results_dir, output_csv_path, 'VAR')
+#get_best_results(results_dir, output_csv_path, 'VAR')
 
 
 best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seedNone/AllResults/best_results.csv"
+    "/AllResults/best_results.csv"
 )
 base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seedNone"
 )
 dir_original_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
@@ -335,15 +334,15 @@ base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_seedNone/BestResults/"
+    "/BestResults/"
 )
-obtain_pred_vs_trues_best_models(
-    best_results_path,
-    base_results_path,
-    dir_original_source,
-    base_dir_output,
-    model='VAR'
-)
+#obtain_pred_vs_trues_best_models(
+#    best_results_path,
+#    base_results_path,
+#    dir_original_source,
+#    base_dir_output,
+#    model='VAR'
+#)
 
 """
 results_dir = (
@@ -397,36 +396,36 @@ results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seedNone/AllResults"
+    "_capped_data/AllResults"
 )
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seedNone/AllResults/results_averaged.csv"
+    "_capped_data/AllResults/results_averaged.csv"
 )
-#average_results(results_dir, output_csv_path, 'VAR')
+average_results(results_dir, output_csv_path, 'VAR')
 
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seedNone/AllResults/best_results.csv"
+    "_capped_data/AllResults/best_results.csv"
 )
-get_best_results(results_dir, output_csv_path, 'VAR')
+#get_best_results(results_dir, output_csv_path, 'VAR')
 
 
 best_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seedNone/AllResults/best_results.csv"
+    "_capped_data/AllResults/best_results.csv"
 )
 base_results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seedNone"
+    "_capped_data"
 )
 dir_original_source = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
@@ -436,15 +435,15 @@ base_dir_output = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/var_model/results[((3,3)"
     ",(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-    "_capped_data_seedNone/BestResults/"
+    "_capped_data/BestResults/"
 )
-obtain_pred_vs_trues_best_models(
-    best_results_path,
-    base_results_path,
-    dir_original_source,
-    base_dir_output,
-    model='VAR'
-)
+#obtain_pred_vs_trues_best_models(
+#    best_results_path,
+#    base_results_path,
+#    dir_original_source,
+#    base_dir_output,
+#    model='VAR'
+#)
 
 """
 results_dir = (
