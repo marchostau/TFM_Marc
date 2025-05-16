@@ -51,7 +51,7 @@ def get_learning_rate(row):
     return config["lr"]
 
 
-def plot_comparison_best_results(uncapped_df, capped_df, base_dir_out, metrics_to_include=["mse"], show_plot=False):
+def plot_comparison_best_results(uncapped_df, capped_df, base_dir_out, metrics_to_include=["mse_mean"], show_plot=False):
     # Get best results from both datasets
     uncapped_results = get_best_linear_results(uncapped_df)
     capped_results = get_best_linear_results(capped_df)
@@ -71,16 +71,16 @@ def plot_comparison_best_results(uncapped_df, capped_df, base_dir_out, metrics_t
         model_classes = list(next(iter(ordered_uncapped.values())).keys())
         
         for model_class in sorted(model_classes):
-            if "r2" in metrics_to_include:
-                r2_values = [ordered_uncapped[lag][model_class]["r2"] for lag in lags]
+            if "r2_mean" in metrics_to_include:
+                r2_values = [ordered_uncapped[lag][model_class]["r2_mean"] for lag in lags]
                 plt.plot(lags, r2_values, label=f"Uncapped {model_class} - R2", linestyle=":", marker='o')
             
-            if "mae" in metrics_to_include:
-                mae_values = [ordered_uncapped[lag][model_class]["mae"] for lag in lags]
+            if "mae_mean" in metrics_to_include:
+                mae_values = [ordered_uncapped[lag][model_class]["mae_mean"] for lag in lags]
                 plt.plot(lags, mae_values, label=f"Uncapped {model_class} - MAE", linestyle="--", marker='o')
             
-            if "mse" in metrics_to_include:
-                mse_values = [ordered_uncapped[lag][model_class]["mse"] for lag in lags]
+            if "mse_mean" in metrics_to_include:
+                mse_values = [ordered_uncapped[lag][model_class]["mse_mean"] for lag in lags]
                 plt.plot(lags, mse_values, label=f"Uncapped {model_class} - MSE", linestyle="-", marker='o')
         
         # Plot capped results
@@ -88,16 +88,16 @@ def plot_comparison_best_results(uncapped_df, capped_df, base_dir_out, metrics_t
         ordered_capped = dict(sorted(capped_lag_data.items(), key=lambda item: int(item[0])))
         
         for model_class in sorted(model_classes):
-            if "r2" in metrics_to_include:
-                r2_values = [ordered_capped[lag][model_class]["r2"] for lag in lags]
+            if "r2_mean" in metrics_to_include:
+                r2_values = [ordered_capped[lag][model_class]["r2_mean"] for lag in lags]
                 plt.plot(lags, r2_values, label=f"Capped {model_class} - R2", linestyle=":", marker='x')
             
-            if "mae" in metrics_to_include:
-                mae_values = [ordered_capped[lag][model_class]["mae"] for lag in lags]
+            if "mae_mean" in metrics_to_include:
+                mae_values = [ordered_capped[lag][model_class]["mae_mean"] for lag in lags]
                 plt.plot(lags, mae_values, label=f"Capped {model_class} - MAE", linestyle="--", marker='x')
             
-            if "mse" in metrics_to_include:
-                mse_values = [ordered_capped[lag][model_class]["mse"] for lag in lags]
+            if "mse_mean" in metrics_to_include:
+                mse_values = [ordered_capped[lag][model_class]["mse_mean"] for lag in lags]
                 plt.plot(lags, mse_values, label=f"Capped {model_class} - MSE", linestyle="-", marker='x')
         
         plt.title(f"Forecast Horizon: {forecast_horizon} - Capped vs Uncapped Comparison")
@@ -117,7 +117,7 @@ def plot_comparison_best_results(uncapped_df, capped_df, base_dir_out, metrics_t
         plt.clf()
 
 
-def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse'):
+def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse_mean'):
     try:
         dataframe["lag"] = dataframe.apply(get_lag, axis=1)
         dataframe["forecast_horizon"] = dataframe.apply(get_forecast_horizon, axis=1)
@@ -136,17 +136,17 @@ def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse'):
     results_info = {}
     for lag, forecast_horizon, model_class, mse, mae, r2, batch_size, lr in zip(
         grouped_df['lag'], grouped_df['forecast_horizon'],
-        grouped_df['model_class'], grouped_df['mse'],
-        grouped_df['mae'], grouped_df['r2'],
+        grouped_df['model_class'], grouped_df['mse_mean'],
+        grouped_df['mae_mean'], grouped_df['r2_mean'],
         grouped_df['batch_size'], grouped_df['lr']
     ):
         results_info.setdefault(forecast_horizon, {})
         results_info[forecast_horizon].setdefault(lag, {})
         results_info[forecast_horizon][lag].setdefault(model_class, {})
         results_info[forecast_horizon][lag][model_class] = {
-            "r2": r2,
-            "mae": mae,
-            "mse": mse,
+            "r2_mean": r2,
+            "mae_mean": mae,
+            "mse_mean": mse,
             "batch_size": batch_size,
             "lr": lr
         }
@@ -156,7 +156,7 @@ def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse'):
 def plot_best_linear_results(
         dataframe: pd.DataFrame,
         base_dir_out: str,
-        metrics_to_include: list = ["mse"],
+        metrics_to_include: list = ["mse_mean"],
         show_plot: bool = False
 ):
     results_info = get_best_linear_results(dataframe)
@@ -170,9 +170,9 @@ def plot_best_linear_results(
         plt.figure(figsize=(14, 8))
 
         for model_class in sorted(model_classes):
-            if "r2" in metrics_to_include:
+            if "r2_mean" in metrics_to_include:
                 r2_values = [
-                    ordered_lag_data[lag][model_class]["r2"] for lag in lags
+                    ordered_lag_data[lag][model_class]["r2_mean"] for lag in lags
                 ]
                 config_labels = [
                     f"{model_class} (Batch: {ordered_lag_data[lag][model_class]['batch_size']}, "
@@ -183,9 +183,9 @@ def plot_best_linear_results(
                     lags, r2_values, label=", ".join(config_labels),
                     linestyle=":", marker='o'
                 )
-            if "mae" in metrics_to_include:
+            if "mae_mean" in metrics_to_include:
                 mae_values = [
-                    ordered_lag_data[lag][model_class]["mae"] for lag in lags
+                    ordered_lag_data[lag][model_class]["mae_mean"] for lag in lags
                 ]
                 config_labels = [
                     f"{model_class} (Batch: {ordered_lag_data[lag][model_class]['batch_size']}, "
@@ -196,9 +196,9 @@ def plot_best_linear_results(
                     lags, mae_values, label=", ".join(config_labels),
                     linestyle="--", marker='o'
                 )
-            if "mse" in metrics_to_include:
+            if "mse_mean" in metrics_to_include:
                 mse_values = [
-                    ordered_lag_data[lag][model_class]["mse"] for lag in lags
+                    ordered_lag_data[lag][model_class]["mse_mean"] for lag in lags
                 ]
                 config_labels = [
                     f"{model_class} (Batch: {ordered_lag_data[lag][model_class]['batch_size']}, "
@@ -245,17 +245,17 @@ def get_all_linear_results_separated(dataframe: pd.DataFrame):
     ) in zip(
         dataframe['forecast_horizon'], dataframe['batch_size'],
         dataframe['lr'], dataframe['lag'],
-        dataframe['model_class'], dataframe['r2'],
-        dataframe['mae'], dataframe['mse']
+        dataframe['model_class'], dataframe['r2_mean'],
+        dataframe['mae_mean'], dataframe['mse_mean']
     ):
         results_info.setdefault(batch_size, {})
         results_info[batch_size].setdefault(lr, {})
         results_info[batch_size][lr].setdefault(forecast_horizon, {})
         results_info[batch_size][lr][forecast_horizon].setdefault(lag, {})
         results_info[batch_size][lr][forecast_horizon][lag][model_class] = {
-            "r2": r2,
-            "mae": mae,
-            "mse": mse
+            "r2_mean": r2,
+            "mae_mean": mae,
+            "mse_mean": mse
         }
 
     return results_info
@@ -264,7 +264,7 @@ def get_all_linear_results_separated(dataframe: pd.DataFrame):
 def plot_all_linear_results_separated(
         dataframe: pd.DataFrame,
         base_dir_out: str,
-        metrics_to_include: list = ["mse"],
+        metrics_to_include: list = ["mse_mean"],
         show_plot: bool = False
 ):
     results_info = get_all_linear_results_separated(dataframe)
@@ -280,16 +280,16 @@ def plot_all_linear_results_separated(
                 plt.figure(figsize=(14, 8))
 
                 for model_class in sorted(model_classes):
-                    if "r2" in metrics_to_include:
-                        r2_values = [ordered_lag_data[lag][model_class]["r2"] for lag in lags]
+                    if "r2_mean" in metrics_to_include:
+                        r2_values = [ordered_lag_data[lag][model_class]["r2_mean"] for lag in lags]
                         plt.plot(lags, r2_values, label=f"{model_class} - R2", linestyle=":", marker = 'o')
 
-                    if "mae" in metrics_to_include:
-                        mae_values = [ordered_lag_data[lag][model_class]["mae"] for lag in lags]
+                    if "mae_mean" in metrics_to_include:
+                        mae_values = [ordered_lag_data[lag][model_class]["mae_mean"] for lag in lags]
                         plt.plot(lags, mae_values, label=f"{model_class} - MAE", linestyle="--", marker = 'o')
 
-                    if "mse" in metrics_to_include:
-                        mse_values = [ordered_lag_data[lag][model_class]["mse"] for lag in lags]
+                    if "mse_mean" in metrics_to_include:
+                        mse_values = [ordered_lag_data[lag][model_class]["mse_mean"] for lag in lags]
                         plt.plot(lags, mse_values, label=f"{model_class} - MSE", linestyle="-", marker = 'o')
 
                 plt.title(f"Batch Size: {batch_size}, LR: {lr}, Forecast Horizon: {forecast_horizon}")
@@ -330,17 +330,17 @@ def get_all_linear_results_joined(dataframe: pd.DataFrame):
     ) in zip(
         dataframe['forecast_horizon'], dataframe['batch_size'],
         dataframe['lr'], dataframe['lag'],
-        dataframe['model_class'], dataframe['r2'],
-        dataframe['mae'], dataframe['mse']
+        dataframe['model_class'], dataframe['r2_mean'],
+        dataframe['mae_mean'], dataframe['mse_mean']
     ):
         results_info.setdefault(forecast_horizon, {})
         results_info[forecast_horizon].setdefault(batch_size, {})
         results_info[forecast_horizon][batch_size].setdefault(lr, {})
         results_info[forecast_horizon][batch_size][lr].setdefault(lag, {})
         results_info[forecast_horizon][batch_size][lr][lag][model_class] = {
-            "r2": r2,
-            "mae": mae,
-            "mse": mse
+            "r2_mean": r2,
+            "mae_mean": mae,
+            "mse_mean": mse
         }
 
     return results_info
@@ -349,7 +349,7 @@ def get_all_linear_results_joined(dataframe: pd.DataFrame):
 def plot_all_linear_results_joined(
         dataframe: pd.DataFrame,
         base_dir_out: str,
-        metrics_to_include: list = ["mse"],
+        metrics_to_include: list = ["mse_mean"],
         show_plot: bool = False
 ):
     results_info = get_all_linear_results_joined(dataframe)
@@ -364,16 +364,16 @@ def plot_all_linear_results_joined(
                 model_classes = list(next(iter(ordered_lag_data.values())).keys())
 
                 for model_class in sorted(model_classes):
-                    if "r2" in metrics_to_include:
-                        r2_values = [ordered_lag_data[lag][model_class]["r2"] for lag in lags]
+                    if "r2_mean" in metrics_to_include:
+                        r2_values = [ordered_lag_data[lag][model_class]["r2_mean"] for lag in lags]
                         plt.plot(lags, r2_values, label=f"bs{batch_size}_lr{lr}_{model_class} - R2", linestyle=":", marker = 'o')
 
-                    if "mae" in metrics_to_include:
-                        mae_values = [ordered_lag_data[lag][model_class]["mae"] for lag in lags]
+                    if "mae_mean" in metrics_to_include:
+                        mae_values = [ordered_lag_data[lag][model_class]["mae_mean"] for lag in lags]
                         plt.plot(lags, mae_values, label=f"bs{batch_size}_lr{lr}_{model_class} - MAE", linestyle="--", marker = 'o')
 
-                    if "mse" in metrics_to_include:
-                        mse_values = [ordered_lag_data[lag][model_class]["mse"] for lag in lags]
+                    if "mse_mean" in metrics_to_include:
+                        mse_values = [ordered_lag_data[lag][model_class]["mse_mean"] for lag in lags]
                         plt.plot(lags, mse_values, label=f"bs{batch_size}_lr{lr}_{model_class} - MSE", linestyle="-", marker = 'o')
 
         plt.title(f"Forecast Horizon: {forecast_horizon}")
@@ -398,8 +398,8 @@ def get_all_var_results(dataframe: pd.DataFrame):
     model_class = "var"
 
     for r2, mse, mae, lag_forecast in zip(
-      dataframe['r2'], dataframe['mse'],
-      dataframe["mae"], dataframe['config']
+      dataframe['r2_mean'], dataframe['mse_mean'],
+      dataframe["mae_mean"], dataframe['config']
     ):
         lag_forecast = lag_forecast.split(",")
         lag_forecast = [value.strip("() ").strip() for value in lag_forecast]
@@ -409,14 +409,14 @@ def get_all_var_results(dataframe: pd.DataFrame):
         results_info[forecast_horizon].setdefault(lag, {})
         results_info[forecast_horizon][lag].setdefault(model_class, {})
         results_info[forecast_horizon][lag][model_class] = {
-            "r2": r2,
-            "mae": mae,
-            "mse": mse,
+            "r2_mean": r2,
+            "mae_mean": mae,
+            "mse_mean": mse,
         }
     return results_info
 
 
-def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to_include=["mse"], show_plot=False):
+def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to_include=["mse_mean"], show_plot=False):
     # Get results from both datasets
     uncapped_results = get_all_var_results(uncapped_df)
     capped_results = get_all_var_results(capped_df)
@@ -436,16 +436,16 @@ def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to
         model_classes = list(next(iter(ordered_uncapped.values())).keys())
         
         for model_class in sorted(model_classes):
-            if "r2" in metrics_to_include:
-                r2_values = [ordered_uncapped[lag][model_class]["r2"] for lag in lags]
+            if "r2_mean" in metrics_to_include:
+                r2_values = [ordered_uncapped[lag][model_class]["r2_mean"] for lag in lags]
                 plt.plot(lags, r2_values, label=f"Uncapped {model_class} - R2", linestyle=":", marker='o')
             
-            if "mae" in metrics_to_include:
-                mae_values = [ordered_uncapped[lag][model_class]["mae"] for lag in lags]
+            if "mae_mean" in metrics_to_include:
+                mae_values = [ordered_uncapped[lag][model_class]["mae_mean"] for lag in lags]
                 plt.plot(lags, mae_values, label=f"Uncapped {model_class} - MAE", linestyle="--", marker='o')
             
-            if "mse" in metrics_to_include:
-                mse_values = [ordered_uncapped[lag][model_class]["mse"] for lag in lags]
+            if "mse_mean" in metrics_to_include:
+                mse_values = [ordered_uncapped[lag][model_class]["mse_mean"] for lag in lags]
                 plt.plot(lags, mse_values, label=f"Uncapped {model_class} - MSE", linestyle="-", marker='o')
         
         # Plot capped results
@@ -453,16 +453,16 @@ def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to
         ordered_capped = dict(sorted(capped_lag_data.items(), key=lambda item: int(item[0])))
         
         for model_class in sorted(model_classes):
-            if "r2" in metrics_to_include:
-                r2_values = [ordered_capped[lag][model_class]["r2"] for lag in lags]
+            if "r2_mean" in metrics_to_include:
+                r2_values = [ordered_capped[lag][model_class]["r2_mean"] for lag in lags]
                 plt.plot(lags, r2_values, label=f"Capped {model_class} - R2", linestyle=":", marker='x')
             
-            if "mae" in metrics_to_include:
-                mae_values = [ordered_capped[lag][model_class]["mae"] for lag in lags]
+            if "mae_mean" in metrics_to_include:
+                mae_values = [ordered_capped[lag][model_class]["mae_mean"] for lag in lags]
                 plt.plot(lags, mae_values, label=f"Capped {model_class} - MAE", linestyle="--", marker='x')
             
-            if "mse" in metrics_to_include:
-                mse_values = [ordered_capped[lag][model_class]["mse"] for lag in lags]
+            if "mse_mean" in metrics_to_include:
+                mse_values = [ordered_capped[lag][model_class]["mse_mean"] for lag in lags]
                 plt.plot(lags, mse_values, label=f"Capped {model_class} - MSE", linestyle="-", marker='x')
         
         plt.title(f"VAR Model - Forecast Horizon: {forecast_horizon} - Capped vs Uncapped Comparison")
@@ -485,7 +485,7 @@ def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to
 def plot_all_var_results(
         dataframe: pd.DataFrame,
         base_dir_out: str,
-        metrics_to_include: list = ["mse"],
+        metrics_to_include: list = ["mse_mean"],
         show_plot: bool = False
 ):
     results_info = get_all_var_results(dataframe)
@@ -498,25 +498,25 @@ def plot_all_var_results(
         plt.figure(figsize=(14, 8))
 
         for model_class in sorted(model_classes):
-            if "r2" in metrics_to_include:
+            if "r2_mean" in metrics_to_include:
                 r2_values = [
-                    ordered_lag_data[lag][model_class]["r2"] for lag in lags
+                    ordered_lag_data[lag][model_class]["r2_mean"] for lag in lags
                 ]
                 plt.plot(
                     lags, r2_values, label=f"{model_class} - R2",
                     linestyle=":", marker='o'
                 )
-            if "mae" in metrics_to_include:
+            if "mae_mean" in metrics_to_include:
                 mae_values = [
-                    ordered_lag_data[lag][model_class]["mae"] for lag in lags
+                    ordered_lag_data[lag][model_class]["mae_mean"] for lag in lags
                 ]
                 plt.plot(
                     lags, mae_values, label=f"{model_class} - MAE",
                     linestyle="--", marker='o'
                 )
-            if "mse" in metrics_to_include:
+            if "mse_mean" in metrics_to_include:
                 mse_values = [
-                    ordered_lag_data[lag][model_class]["mse"] for lag in lags
+                    ordered_lag_data[lag][model_class]["mse_mean"] for lag in lags
                 ]
                 plt.plot(
                     lags, mse_values, label=f"{model_class} - MSE",
@@ -557,7 +557,7 @@ def plot_linear_and_var_results(
     dataframe_linear: pd.DataFrame,
     dataframe_var: pd.DataFrame,
     base_dir_out: str,
-    metrics_to_include: list = ["mse"],
+    metrics_to_include: list = ["mse_mean"],
     show_plot: bool = False
 ):
     results_linear = get_best_linear_results(dataframe_linear)
@@ -568,7 +568,7 @@ def plot_linear_and_var_results(
 
     os.makedirs(base_dir_out, exist_ok=True)
 
-    linestyle_map = {"r2": ":", "mae": "--", "mse": "-"}
+    linestyle_map = {"r2_mean": ":", "mae_mean": "--", "mse_mean": "-"}
 
     for lr, vr in zip(sorted(results_linear), sorted(results_var)):
 
@@ -606,10 +606,9 @@ def plot_linear_and_var_results(
         plt.clf()
 
 
-"""
 base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
 results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
 )
 results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
 #results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/testing_results_seedNone.csv"
@@ -625,7 +624,7 @@ plot_best_linear_results(df_linear, f"{plot_base}/best_results")
 results_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/AllResults/"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
     "results_averaged.csv"
 )
 df_var = pd.read_csv(results_path)
@@ -634,18 +633,17 @@ base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/plots/testing_results/var_model/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]"
+    "(12,6),(12,9)]_capped_data"
 )
 #plot_all_var_results(df_var, base_dir_out)
 
 base_dir_out = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
     "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
+    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
 )
 plot_linear_and_var_results(df_linear, df_var, base_dir_out)
 
-"""
 
 base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
 
@@ -669,10 +667,11 @@ plot_comparison_best_results(
     df_uncapped,
     df_capped,
     base_dir_out,
-    metrics_to_include=["mse"]
+    metrics_to_include=["mse_mean"]
 )
 
 
+"""
 base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
 
 # Uncapped VAR data
@@ -696,3 +695,4 @@ plot_var_comparison_results(
     df_var_capped,
     base_dir_out
 )
+"""

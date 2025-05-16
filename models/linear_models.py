@@ -474,7 +474,7 @@ for seed, experiment_path in zip(random_seed_list, experiment_path_list):
     )
 """
 
-
+"""
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
@@ -541,27 +541,7 @@ output_csv_path = (
     "concatenated_seed_results.csv"
 )
 concatenate_all_seeds_results(results_dir, output_csv_path)
-
-concatenated_results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/evaluate_results/linear_models/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]/AllResults/"
-    "concatenated_seed_results.csv"
-)
-output_csv_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/linear_models/results[((3,3),(6,6),"
-    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/"
-    "AllResults/std_between_seed_results.csv"
-)
-output_csv_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/AllResults/"
-    "std_between_seed_results.csv"
-)
-conc_res_df = pd.read_csv(concatenated_results_path)
+"""
 
 
 """
@@ -603,7 +583,7 @@ output_csv_path = (
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
     "(12,6),(12,9)]_capped_data/AllResults/best_results.csv"
 )
-#get_best_results(results_dir, output_csv_path)
+get_best_results(results_dir, output_csv_path)
 
 
 best_results_path = (
@@ -628,12 +608,12 @@ base_dir_output = (
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
     "(12,6),(12,9)]_capped_data/BestResults/"
 )
-#obtain_pred_vs_trues_best_models(
-#    best_results_path,
-#    base_results_path,
-#    dir_original_source,
-#    base_dir_output
-#)
+obtain_pred_vs_trues_best_models(
+    best_results_path,
+    base_results_path,
+    dir_original_source,
+    base_dir_output
+)
 
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
@@ -649,24 +629,3 @@ output_csv_path = (
     "concatenated_seed_results.csv"
 )
 concatenate_all_seeds_results(results_dir, output_csv_path)
-
-concatenated_results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/evaluate_results/linear_models/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data/AllResults/"
-    "concatenated_seed_results.csv"
-)
-output_csv_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/linear_models/results[((3,3),(6,6),"
-    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/"
-    "AllResults/std_between_seed_results.csv"
-)
-output_csv_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
-    "std_between_seed_results.csv"
-)
-conc_res_df = pd.read_csv(concatenated_results_path)
