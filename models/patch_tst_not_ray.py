@@ -13,9 +13,20 @@ import matplotlib.pyplot as plt
 from transformers import PatchTSTForPrediction, PatchTSTConfig
 from ..data_processing.dataset_loader import WindTimeSeriesDataset
 from ..logging_information.logging_config import get_logger
-from ..models.utils import (
-    split_dataset, custom_collate_fn
+#from ..models.utils import (
+#    split_dataset, custom_collate_fn
+#)
+from .utils import (
+    split_dataset,
+    custom_collate_fn,
+    postprocess_data,
+    average_results,
+    get_best_results,
+    obtain_pred_vs_trues_best_models,
+    concatenate_all_seeds_results,
+    denormalize_original_dfs
 )
+
 
 logger = get_logger(__name__)
 
@@ -494,6 +505,7 @@ def run_experiments(
     #logger.info(f"All experiment results saved to {results_path}")
 
 
+"""
 search_space = {
     "lag_patch_forecast": [
         (3, 1, 3), (6, 1, 3), (9, 1, 3),
@@ -539,19 +551,48 @@ search_space = {
     "head_dropout": 0.0
 }
 
-if __name__ == "__main__":
-    output_base_dir = "/home/nct/nct01089/patchTSTResults3/patchTST_res1"
-    random_seed_list = [None]  # Or [None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+output_base_dir = "/home/nct/nct01089/patchTSTResults3/patchTST_res1"
+random_seed_list = [None]  # Or [None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-    run_experiments(
-        search_space=search_space,
-        output_base_dir=os.path.join(output_base_dir, "uncapped"),
-        random_seed_list=random_seed_list
-    )
+run_experiments(
+    search_space=search_space,
+    output_base_dir=os.path.join(output_base_dir, "uncapped"),
+    random_seed_list=random_seed_list
+)
 
-    search_space["cap_data"] = True
-    run_experiments(
-        search_space=search_space,
-        output_base_dir=os.path.join(output_base_dir, "capped"),
-        random_seed_list=random_seed_list
-    )
+search_space["cap_data"] = True
+run_experiments(
+    search_space=search_space,
+    output_base_dir=os.path.join(output_base_dir, "capped"),
+    random_seed_list=random_seed_list
+)
+"""
+
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/patchtst_model/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9),(18,3)]/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/patchtst_model/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9),(18,3)]/AllResults/best_results.csv"
+)
+get_best_results(results_dir, output_csv_path)
+
+
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/patchtst_model/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9),(18,3)]/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/patchtst_model/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9),(18,3)]/AllResults/best_results.csv"
+)
+get_best_results(results_dir, output_csv_path)

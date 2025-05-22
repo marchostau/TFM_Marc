@@ -474,7 +474,7 @@ for seed, experiment_path in zip(random_seed_list, experiment_path_list):
     )
 """
 
-"""
+
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
@@ -485,10 +485,12 @@ output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
     "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]/AllResults/results_averaged.csv"
+    "(12,6),(12,9)]/AllResults/results_averaged_new.csv"
 )
 average_results(results_dir, output_csv_path)
 
+
+"""
 output_csv_path = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
@@ -562,7 +564,7 @@ dir_output = (
 denormalize_original_dfs(dir_denorm, dir_original_source, dir_output)
 """
 
-
+"""
 results_dir = (
     "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
     "models/evaluate_results/linear_models/results"
@@ -629,3 +631,214 @@ output_csv_path = (
     "concatenated_seed_results.csv"
 )
 concatenate_all_seeds_results(results_dir, output_csv_path)
+"""
+
+
+"""
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults/results_averaged.csv"
+)
+average_results(results_dir, output_csv_path)
+
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults/best_results.csv"
+)
+get_best_results(results_dir, output_csv_path)
+
+
+best_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
+    "/AllResults/best_results.csv"
+)
+base_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/"
+)
+dir_original_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv"
+)
+base_dir_output = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/BestResults/"
+)
+obtain_pred_vs_trues_best_models(
+    best_results_path,
+    base_results_path,
+    dir_original_source,
+    base_dir_output
+)
+
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data/AllResults/"
+    "concatenated_seed_results.csv"
+)
+concatenate_all_seeds_results(results_dir, output_csv_path)
+
+
+
+
+
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seed0/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seed0/AllResults/results_averaged.csv"
+)
+average_results(results_dir, output_csv_path)
+
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seed0/AllResults/best_results.csv"
+)
+get_best_results(results_dir, output_csv_path)
+
+
+best_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
+    "/AllResults/best_results.csv"
+)
+base_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seed0/"
+)
+dir_original_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv"
+)
+base_dir_output = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seed0/BestResults/"
+)
+obtain_pred_vs_trues_best_models(
+    best_results_path,
+    base_results_path,
+    dir_original_source,
+    base_dir_output
+)
+
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seed0/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seed0/AllResults/"
+    "concatenated_seed_results.csv"
+)
+concatenate_all_seeds_results(results_dir, output_csv_path)
+"""
+
+
+"""
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seedNone/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seedNone/AllResults/results_averaged.csv"
+)
+average_results(results_dir, output_csv_path)
+
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seedNone/AllResults/best_results.csv"
+)
+get_best_results(results_dir, output_csv_path)
+
+best_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
+    "evaluate_results/linear_models/results[((3,3),(6,6),"
+    "(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone"
+    "/AllResults/best_results.csv"
+)
+base_results_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seedNone/"
+)
+dir_original_source = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
+    "complete_datasets_csv"
+)
+base_dir_output = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seedNone/BestResults/"
+)
+obtain_pred_vs_trues_best_models(
+    best_results_path,
+    base_results_path,
+    dir_original_source,
+    base_dir_output
+)
+
+results_dir = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seedNone/AllResults"
+)
+output_csv_path = (
+    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
+    "models/evaluate_results/linear_models/results"
+    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
+    "(12,6),(12,9)]_capped_data_seedNone/AllResults/"
+    "concatenated_seed_results.csv"
+)
+concatenate_all_seeds_results(results_dir, output_csv_path)
+"""

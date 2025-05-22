@@ -121,6 +121,14 @@ def average_results(
         grouped['mse_cv_percent'] = (grouped['mse_std'] / grouped['mse_mean']) * 100
         grouped['mae_cv_percent'] = (grouped['mae_std'] / grouped['mae_mean']) * 100
 
+        high_mse_cv = grouped[grouped['mse_cv_percent'] > 10]
+
+        if not high_mse_cv.empty:
+            print("⚠️ Rows with MSE Coefficient of Variation > 10%:")
+            print(high_mse_cv[['model_class', 'lag', 'forecast_horizon', 'batch_size', 'lr', 'mse_mean', 'mse_std', 'mse_cv_percent']])
+        else:
+            print("✅ No rows with MSE Coefficient of Variation above 10%.")
+
     else:
         conc_df = pd.concat(
             [pd.read_csv(f) for f in file_list],
@@ -151,32 +159,39 @@ def get_best_results(
 ):
     file_list = get_seed_file_list(results_dir)
 
-    df_list = []
-    for f in file_list:
-        df = pd.read_csv(f)
-
-        df['source_file'] = os.path.basename(f)
-        try:
-            df['config'] = df['config'].apply(obtain_config_dict)
-            config_df = pd.json_normalize(df['config'])
-            df = pd.concat(
-                [df.drop('config', axis=1), config_df], axis=1
-            )
-        except KeyError:
-            pass
-
-        df_list.append(df)
-
-    conc_df = pd.concat(df_list, ignore_index=True)
-
     if model_results == 'Linear':
+        df_list = []
+        for f in file_list:
+            df = pd.read_csv(f)
+
+            df['source_file'] = os.path.basename(f)
+            try:
+                df['config'] = df['config'].apply(obtain_config_dict)
+                config_df = pd.json_normalize(df['config'])
+                df = pd.concat(
+                    [df.drop('config', axis=1), config_df], axis=1
+                )
+            except KeyError:
+                pass
+
+            df_list.append(df)
+
+        conc_df = pd.concat(df_list, ignore_index=True)
+
         for col in ['lag', 'forecast_horizon', 'batch_size', 'lr']:
             conc_df[col] = pd.to_numeric(conc_df[col], errors='coerce')
-        
+
         best_idx = conc_df.groupby(
             ['model_class', 'lag', 'forecast_horizon']
         )['mse'].idxmin()
     else:
+        df_list = []
+        for f in file_list:
+            df = pd.read_csv(f)
+            df['source_file'] = os.path.basename(f)
+            df_list.append(df)
+
+        conc_df = pd.concat(df_list, ignore_index=True)
         best_idx = conc_df.groupby('config')['mse'].idxmin()
 
     best_rows = conc_df.loc[best_idx].copy()
@@ -361,6 +376,7 @@ def obtain_pred_vs_trues_best_models(
         model: str = 'Linear'
 ):
     best_results_df = pd.read_csv(best_results_path)
+    print(best_results_df)
 
     for idx, row in best_results_df.iterrows():
         if model == 'Linear':
@@ -375,6 +391,7 @@ def obtain_pred_vs_trues_best_models(
             model_name = config["model_class"]
             lag = config["lag"]
             fh = config["forecast_horizon"]
+
             batch_size = config["batch_size"]
             lr = config["lr"]
 
@@ -400,8 +417,8 @@ def obtain_pred_vs_trues_best_models(
                     "() "
                 ).strip() for value in lag_forecast
             ]
-            lag = lag_forecast[0]
-            fh = lag_forecast[1]
+            lag = int(lag_forecast[0])
+            fh = int(lag_forecast[1])
             source_file = row["source_file"]
             seed = (source_file.split("_"))[2]
             seed = (seed.split("."))[0]
@@ -416,7 +433,7 @@ def obtain_pred_vs_trues_best_models(
 
             file_output = (f"{seed}_model_VAR_lag{lag}_fh{fh}")
             dir_output = os.path.join(base_dir_output, file_output)
-
+        
         postprocess_data(
             trues_pred_df,
             dir_original_source,

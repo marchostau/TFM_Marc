@@ -98,9 +98,6 @@ def train_linear_model(
         train_dataset.indices = train_dataset.indices[:train_num_seq]
         logger.info(f"Capped data, train dataset length: {len(train_dataset)}")
 
-    print(f"Train dataset: {train_dataset}")
-    print(f"Train dataset len: {len(train_dataset)}")
-
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
@@ -207,13 +204,7 @@ def evaluate_linear_model(
             test_num_seq = 982
 
     if test_num_seq:
-        print(f"test_num_seq: {test_num_seq}")
-        print(f"Original test indices: {len(test_dataset.indices)}")
         test_dataset.indices = test_dataset.indices[:test_num_seq]
-        print(f"Capped test indices: {len(test_dataset.indices)}")
-
-    print(f"Test dataset: {test_dataset}")
-    print(f"Test dataset len: {len(test_dataset)}")
 
     test_loader = DataLoader(
         test_dataset,
@@ -315,7 +306,6 @@ def save_loss_plots(
     plt.close()
 
 
-
 def run_experiments(
     search_space: dict,
     output_base_dir: str,
@@ -351,11 +341,6 @@ def run_experiments(
             lag, fh = config["lag_forecast"]
             bs = config["batch_size"]
             lr = config["lr"]
-
-
-            cap_data = config["cap_data"]
-            print(f"Lag: {lag} | Forecast: {fh} | capped_data: {cap_data}")
-
 
             exp_dir = os.path.join(
                 seed_dir, f"model_{model_name}"
