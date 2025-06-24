@@ -78,9 +78,10 @@ def remove_outliers_dbscan(
     dataframe = dataframe[
             dataframe['cluster'] != -1
         ].drop(columns=['cluster'])
-    logger.info(f"DBSCAN removed {original_len - len(dataframe)} outliers")
+    removed_rows = original_len - len(dataframe)
+    logger.info(f"DBSCAN removed {removed_rows} outliers")
 
-    return dataframe
+    return dataframe, removed_rows
 
 
 def compute_iqr_bounds(dataframe: pd.DataFrame, cols: list):

@@ -1,8 +1,5 @@
-#dir_source: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv"
-#dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
-#dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/complete_datasets_csv_processed_10m_zstd_dbscan"
-dir_source: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/example_csv"
-dir_output: "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/example_processed_csv"
+dir_source: "datasets/complete_datasets_csv"
+dir_output: "datasets/complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
 
 remove_duplicates: true
 remove_wrong_dates: true
@@ -11,7 +8,7 @@ remove_points_outside_polygon: true
 split_continuous_segments: true
 gap_threshold: "10m"
 
-normalize: true
+normalize: false
 norm_mode: "z-standardization"
 norm_daily_based: false
 norm_cols: ["latitude", "longitude", "wind_speed", "wind_direction", "u_component", "v_component"]

@@ -2,6 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from typing import List, Dict, Any
 
 from .utils import obtain_config_dict
 
@@ -120,6 +121,60 @@ def get_best_patchtst_results(dataframe: pd.DataFrame, min_by: str = 'mse_mean')
     return results_info
 
 
+def get_best_transformer_results(dataframe: pd.DataFrame, min_by: str = 'mse_mean'):
+    try:
+        dataframe["lag"] = dataframe.apply(get_lag, axis=1)
+        dataframe["forecast_horizon"] = dataframe.apply(get_forecast_horizon, axis=1)
+        dataframe["model_class"] = dataframe.apply(get_model_class, axis=1)
+        dataframe["batch_size"] = dataframe.apply(get_batch_size, axis=1)
+        dataframe["lr"] = dataframe.apply(get_learning_rate, axis=1)
+    except KeyError:
+        pass
+
+    grouped_df = dataframe.loc[
+        dataframe.groupby(
+            ['lag', 'forecast_horizon', 'model_class']
+        )[min_by].idxmin()
+    ].reset_index()
+
+    results_info = {}
+    for (lag, forecast_horizon, model_class, mse, mae, r2,
+         batch_size, lr, num_input_channels,
+         num_hidden_layers, d_model, num_attention_heads, 
+         ffn_dim, activation_function,
+         num_targets, attention_dropout, positional_dropout,) in zip(
+        grouped_df['lag'], grouped_df['forecast_horizon'],
+        grouped_df['model_class'], grouped_df['mse_mean'],
+        grouped_df['mae_mean'], grouped_df['r2_mean'],
+        grouped_df['batch_size'], grouped_df['lr'],
+        grouped_df['num_input_channels'], grouped_df['num_hidden_layers'],
+        grouped_df['d_model'], grouped_df['num_attention_heads'],
+        grouped_df['ffn_dim'], grouped_df['activation_function'],
+        grouped_df['num_targets'], grouped_df['attention_dropout'], 
+        grouped_df['positional_dropout']
+    ):
+        results_info.setdefault(forecast_horizon, {})
+        results_info[forecast_horizon].setdefault(lag, {})
+        results_info[forecast_horizon][lag].setdefault(model_class, {})
+        results_info[forecast_horizon][lag][model_class] = {
+            "r2_mean": r2,
+            "mae_mean": mae,
+            "mse_mean": mse,
+            "batch_size": batch_size,
+            "lr": lr,
+            "num_input_channels": num_input_channels,
+            "num_hidden_layers": num_hidden_layers,
+            "d_model": d_model,
+            "num_attention_heads": num_attention_heads,
+            "ffn_dim": ffn_dim,
+            "activation_function": activation_function,
+            "num_targets": num_targets,
+            "attention_dropout": attention_dropout,
+            "positional_dropout": positional_dropout,
+        }
+    return results_info
+
+
 def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse_mean'):
     try:
         dataframe["lag"] = dataframe.apply(get_lag, axis=1)
@@ -157,90 +212,74 @@ def get_best_linear_results(dataframe: pd.DataFrame, min_by: str = 'mse_mean'):
 
 
 def plot_best_patchtst_results(
-        dataframe: pd.DataFrame,
-        base_dir_out: str,
-        metrics_to_include: list = ["mse_mean"],
-        show_plot: bool = False
-):
-    # For each forecast horizon, lag and model -> Plot just the best configuration.
+    dataframe: pd.DataFrame,
+    base_dir_out: str,
+    metrics_to_include: List[str] = ["mse_mean"],
+    show_plot: bool = False
+) -> None:
     results_info = get_best_patchtst_results(dataframe)
+    os.makedirs(base_dir_out, exist_ok=True)
+
+    # Define plot styles for different metrics
+    metric_styles = {
+        "r2_mean": {"linestyle": ":", "marker": "o", "suffix": " - R2"},
+        "mae_mean": {"linestyle": "--", "marker": "o", "suffix": " - MAE"},
+        "mse_mean": {"linestyle": "-", "marker": "o", "suffix": "- MSE"}
+    }
 
     for forecast_horizon, lag_data in results_info.items():
+        forecast_horizon = int(forecast_horizon)
         ordered_lag_data = dict(sorted(lag_data.items(), key=lambda item: int(item[0])))
-        lags = list(ordered_lag_data.keys())
-
+        lags = [int(lag) for lag in ordered_lag_data.keys()]
         model_classes = list(next(iter(ordered_lag_data.values())).keys())
-
-        print(f"Forecast horizon: {forecast_horizon}")
-        print(f"Ordered lag data: {ordered_lag_data}")
 
         plt.figure(figsize=(16, 10))
 
         for model_class in sorted(model_classes):
-            if "r2_mean" in metrics_to_include:
-                r2_values = [
-                    ordered_lag_data[lag][model_class]["r2_mean"] for lag in lags
-                ]
-                config_labels = [
-                    f"Lag {lag}: "  
-                    f"Patch: {ordered_lag_data[lag][model_class]['patch_size']}, "
-                    f"Layers: {ordered_lag_data[lag][model_class]['num_hidden_layers']}, "
-                    f"d_model: {ordered_lag_data[lag][model_class]['d_model']}\n"
-                    f"Heads: {ordered_lag_data[lag][model_class]['num_attention_heads']}, "
-                    f"FFN: {ordered_lag_data[lag][model_class]['ffn_dim']}, \n"
-                    f"Batch: {ordered_lag_data[lag][model_class]['batch_size']}, "
-                    f"LR: {ordered_lag_data[lag][model_class]['lr']}, \n"
-                    f"Att Dropout: {ordered_lag_data[lag][model_class]['attention_dropout']} - R2"
+            for metric in metrics_to_include:
+                if metric not in metric_styles:
+                    continue
+                    
+                # Get values for the current metric
+                values = [
+                    ordered_lag_data[lag][model_class][metric] 
                     for lag in lags
                 ]
+                
+                # Generate configuration labels
+                config_labels = []
+                for lag in lags:
+                    config = ordered_lag_data[lag][model_class]
+                    label = (
+                        f"Lag {lag}: "
+                        f"Patch: {int(config['patch_size'])}, "
+                        f"Stride: {int(config['patch_stride'])}, \n"
+                        f"Layers: {int(config['num_hidden_layers'])}, "
+                        f"d_model: {int(config['d_model'])}\n"
+                        f"Heads: {int(config['num_attention_heads'])}, "
+                        f"FFN: {int(config['ffn_dim'])}, \n"
+                        f"Batch: {int(config['batch_size'])}, "
+                        f"LR: {config['lr']:.0e}, \n"
+                        f"Norm eps: {config['norm_eps']*100}, "
+                        f"Pos Dropout: {config['positional_dropout']*100}, \n"
+                        f"Head Dropout: {config['head_dropout']*100}, "
+                        f"Path Dropout: {config['path_dropout']*100}, \n"
+                        f"Att Dropout: {config['attention_dropout']*100}"
+                        f"{metric_styles[metric]['suffix']}"
+                    )
+                    config_labels.append(label)
+                
+                # Plot the values
                 plt.plot(
-                    lags, r2_values, label="\n".join(config_labels),
-                    linestyle=":", marker='o'
-                )
-            if "mae_mean" in metrics_to_include:
-                mae_values = [
-                    ordered_lag_data[lag][model_class]["mae_mean"] for lag in lags
-                ]
-                config_labels = [
-                    f"Lag {lag}: "  
-                    f"Patch: {ordered_lag_data[lag][model_class]['patch_size']}, "
-                    f"Layers: {ordered_lag_data[lag][model_class]['num_hidden_layers']}, "
-                    f"d_model: {ordered_lag_data[lag][model_class]['d_model']}\n"
-                    f"Heads: {ordered_lag_data[lag][model_class]['num_attention_heads']}, "
-                    f"FFN: {ordered_lag_data[lag][model_class]['ffn_dim']}, \n"
-                    f"Batch: {ordered_lag_data[lag][model_class]['batch_size']}, "
-                    f"LR: {ordered_lag_data[lag][model_class]['lr']}, \n"
-                    f"Att Dropout: {ordered_lag_data[lag][model_class]['head_dropout']} - MAE"
-                    for lag in lags
-                ]
-                plt.plot(
-                    lags, mae_values, label="\n".join(config_labels),
-                    linestyle="--", marker='o'
-                )
-            if "mse_mean" in metrics_to_include:
-                mse_values = [
-                    ordered_lag_data[lag][model_class]["mse_mean"] for lag in lags
-                ]
-                config_labels = [
-                    f"Lag {lag}: "  
-                    f"Patch: {ordered_lag_data[lag][model_class]['patch_size']}, "
-                    f"Layers: {ordered_lag_data[lag][model_class]['num_hidden_layers']}, "
-                    f"d_model: {ordered_lag_data[lag][model_class]['d_model']}\n"
-                    f"Heads: {ordered_lag_data[lag][model_class]['num_attention_heads']}, "
-                    f"FFN: {ordered_lag_data[lag][model_class]['ffn_dim']}, \n"
-                    f"Batch: {ordered_lag_data[lag][model_class]['batch_size']}, "
-                    f"LR: {ordered_lag_data[lag][model_class]['lr']}, \n"
-                    f"Att Dropout: {ordered_lag_data[lag][model_class]['head_dropout']} - MSE"
-                    for lag in lags
-                ]
-                plt.plot(
-                    lags, mse_values, label="\n".join(config_labels),
-                    linestyle="-", marker='o'
+                    lags, values,
+                    label="\n".join(config_labels),
+                    linestyle=metric_styles[metric]["linestyle"],
+                    marker=metric_styles[metric]["marker"]
                 )
 
         plt.title(f"Forecast Horizon: {forecast_horizon}")
         plt.xlabel("Lag")
-        plt.ylabel("Metrics")
+        plt.ylabel("Metric Value")
         
         # Move legend outside the plot to the right
         plt.legend(
@@ -252,21 +291,97 @@ def plot_best_patchtst_results(
         )
         
         plt.grid(True)
-        
-        # Adjust layout to make room for the legend
         plt.tight_layout(rect=[0, 0, 0.75, 1])  # Left, bottom, right, top
-
-        if not os.path.exists(base_dir_out):
-            os.makedirs(base_dir_out)
 
         plt.savefig(
             f"{base_dir_out}/fh{forecast_horizon}_results.png",
-            bbox_inches='tight'  # Ensures legend is included in saved image
+            bbox_inches='tight'
         )
+        
         if show_plot:
             plt.show()
+        else:
+            plt.close()
 
-        plt.clf()
+
+def plot_best_transformer_results(
+    dataframe: pd.DataFrame,
+    base_dir_out: str,
+    metrics_to_include: List[str] = ["mse_mean"],
+    show_plot: bool = False
+) -> None:
+    results_info = get_best_transformer_results(dataframe)
+    os.makedirs(base_dir_out, exist_ok=True)
+
+    METRIC_CONFIG = {
+        "r2_mean": {"style": ":", "suffix": " - R2"},
+        "mae_mean": {"style": "--", "suffix": " - MAE"},
+        "mse_mean": {"style": "-", "suffix": " - MSE"}
+    }
+
+    for forecast_horizon, lag_data in results_info.items():
+        forecast_horizon = int(forecast_horizon)
+        ordered_lag_data = dict(sorted(lag_data.items(), key=lambda item: int(item[0])))
+        lags = [int(lag) for lag in ordered_lag_data.keys()]
+        model_classes = list(next(iter(ordered_lag_data.values())).keys())
+
+        plt.figure(figsize=(16, 10))
+
+        for model_class in sorted(model_classes):
+            for metric in metrics_to_include:
+                if metric not in METRIC_CONFIG:
+                    continue
+                
+                # Get values and prepare labels
+                values = [ordered_lag_data[lag][model_class][metric] for lag in lags]
+                config_labels = []
+                
+                for lag in lags:
+                    config = ordered_lag_data[lag][model_class]
+                    label = (
+                        f"Lag {lag}: "
+                        f"Layers: {int(config['num_hidden_layers'])}, "
+                        f"d_model: {int(config['d_model'])}\n"
+                        f"Heads: {int(config['num_attention_heads'])}, "
+                        f"FFN: {int(config['ffn_dim'])}, \n"
+                        f"Batch: {int(config['batch_size'])}, "
+                        f"LR: {config['lr']:.0e}, \n"
+                        f"Pos Dropout: {config['positional_dropout']}, \n"
+                        f"Att Dropout: {config['attention_dropout']}"
+                        f"{METRIC_CONFIG[metric]['suffix']}"
+                    )
+                    config_labels.append(label)
+                
+                # Plot the data
+                plt.plot(
+                    lags, values,
+                    label="\n".join(config_labels),
+                    linestyle=METRIC_CONFIG[metric]["style"],
+                    marker='o'
+                )
+
+        plt.title(f"Forecast Horizon: {forecast_horizon}")
+        plt.xlabel("Lag")
+        plt.ylabel("Metric Value")
+        plt.grid(True)
+        
+        plt.legend(
+            title="Model Configurations",
+            bbox_to_anchor=(1.05, 1),
+            loc='upper left',
+            borderaxespad=0.,
+            fontsize='small'
+        )
+        
+        plt.tight_layout(rect=[0, 0, 0.75, 1])
+        plt.savefig(
+            f"{base_dir_out}/fh{forecast_horizon}_results.png",
+            bbox_inches='tight'
+        )
+        
+        if show_plot:
+            plt.show()
+        plt.close()
 
 
 def plot_all_patchtst_results_joined(
@@ -278,7 +393,6 @@ def plot_all_patchtst_results_joined(
     if not os.path.exists(base_dir_out):
         os.makedirs(base_dir_out)
 
-    # Columns that define a unique config
     config_cols = [
         'patch_size', 'num_hidden_layers', 'd_model', 'num_attention_heads',
         'ffn_dim', 'batch_size', 'lr', 'attention_dropout'
@@ -334,13 +448,6 @@ def plot_all_patchtst_results_joined(
 
         # Save legend separately
         legend_fig = plt.figure(figsize=(12, len(labels) * 0.3))
-        legend = legend_fig.legend(
-            handles=handles,
-            labels=labels,
-            loc='center',
-            fontsize='small',
-            title="Model Configurations"
-        )
         legend_fig.canvas.draw()
 
         legend_path = os.path.join(base_dir_out, f"fh{fh}_legend.png")
@@ -348,14 +455,12 @@ def plot_all_patchtst_results_joined(
         plt.close(legend_fig)
 
 
-
-
 def plot_best_patchtst_results_by_patch_size(
         dataframe: pd.DataFrame,
         base_dir_out: str,
         metrics_to_include: list = ["mse_mean"],
         show_plot: bool = False
-):
+):   
     all_patch_sizes = sorted(dataframe['patch_size'].unique())
     
     grouped = dataframe.groupby(
@@ -370,6 +475,7 @@ def plot_best_patchtst_results_by_patch_size(
         os.makedirs(base_dir_out)
     
     for forecast_horizon in best_by_patch['forecast_horizon'].unique():
+        forecast_horizon = int(forecast_horizon)
         plt.figure(figsize=(16, 10))
         
         fh_data = best_by_patch[best_by_patch['forecast_horizon'] == forecast_horizon]
@@ -400,38 +506,26 @@ def plot_best_patchtst_results_by_patch_size(
 
                     config_label = (
                         f"{config_label}"
-                        f"Lag {row['lag']}: "
-                        f"Layers: {row['num_hidden_layers']}, "
-                        f"d_model: {row['d_model']}\n"
-                        f"Heads: {row['num_attention_heads']}, "
-                        f"FFN: {row['ffn_dim']}\n"
-                        f"Batch: {row['batch_size']}, "
-                        f"LR: {row['lr']}\n"
+                        f"Lag {int(row['lag'])}: "
+                        f"Layers: {int(row['num_hidden_layers'])}, "
+                        f"Stride: {int(row['patch_stride'])}, "
+                        f"d_model: {int(row['d_model'])}\n"
+                        f"Heads: {int(row['num_attention_heads'])}, "
+                        f"FFN: {int(row['ffn_dim'])}\n"
+                        f"Batch: {int(row['batch_size'])}, "
+                        f"LR: {int(row['lr'])}\n"
                         f"Att Dropout: {row['attention_dropout']} - {metric_label}\n"
                     )
-                
-                """
-                linestyle = '-'
-                if patch_size == 1:
-                    linestyle = '-'
-                elif patch_size == 2:
-                    linestyle = '--'
-                elif patch_size == 3:
-                    linestyle = ':'
-                elif patch_size == 4:
-                    linestyle = '-.'
-                """
                 
                 plt.plot(
                     patch_data['lag'],
                     patch_data[metric],
                     label=config_label,
                     marker='o',
-                    #linestyle=linestyle,
                     linewidth=2
                 )
         
-        plt.title(f"Best Performance by Patch Size - Forecast Horizon: {forecast_horizon}")
+        plt.title(f"Best Performance by Patch Size - Forecast Horizon: {int(forecast_horizon)}")
         plt.xlabel("Lag")
         plt.ylabel("Metric Value")
         plt.xticks(lags)
@@ -451,7 +545,7 @@ def plot_best_patchtst_results_by_patch_size(
         
         # Save the plot
         plt.savefig(
-            f"{base_dir_out}/fh{forecast_horizon}_by_patch_size.png",
+            f"{base_dir_out}/fh{int(forecast_horizon)}_by_patch_size.png",
             bbox_inches='tight'
         )
         
@@ -504,7 +598,7 @@ def plot_patchtst_comparison_results(
 
             if "mse_mean" in metrics_to_include:
                 mse_values = [ordered_uncapped[lag][model_class]["mse_mean"] for lag in common_lags]
-                plt.plot(common_lags, mse_values, label=f"Uncapped {model_class} - MSE", linestyle="-", marker='o')
+                plt.plot(common_lags, mse_values, label=f"Uncapped {model_class}", linestyle="-", marker='o')
 
         for model_class in sorted(model_classes):
             if "r2_mean" in metrics_to_include:
@@ -517,11 +611,87 @@ def plot_patchtst_comparison_results(
 
             if "mse_mean" in metrics_to_include:
                 mse_values = [ordered_capped[lag][model_class]["mse_mean"] for lag in common_lags]
-                plt.plot(common_lags, mse_values, label=f"Capped {model_class} - MSE", linestyle="-", marker='x')
+                plt.plot(common_lags, mse_values, label=f"Capped {model_class}", linestyle="-", marker='x')
 
         plt.title(f"Forecast Horizon: {forecast_horizon} - Capped vs Uncapped Comparison")
         plt.xlabel("Lag")
-        plt.ylabel("Metrics")
+        plt.ylabel("MSE")
+        plt.legend(title="Data Type, Model Class and Metric")
+        plt.grid(True)
+        plt.tight_layout()
+
+        if not os.path.exists(base_dir_out):
+            os.makedirs(base_dir_out)
+
+        plt.savefig(f"{base_dir_out}/comparison_fh{forecast_horizon}_results.png")
+        if show_plot:
+            plt.show()
+
+        plt.close()
+
+
+def plot_transformer_comparison_results(
+        uncapped_df: pd.DataFrame,
+        capped_df: pd.DataFrame,
+        base_dir_out: str,
+        metrics_to_include=["mse_mean"],
+        show_plot=False
+):
+    uncapped_results = get_best_transformer_results(uncapped_df)
+    capped_results = get_best_transformer_results(capped_df)
+
+    for forecast_horizon in uncapped_results.keys():
+
+        fh_int = int(forecast_horizon)
+        if fh_int not in capped_results:
+            continue
+
+        plt.figure(figsize=(14, 8))
+
+        uncapped_lag_data = uncapped_results[forecast_horizon]
+        ordered_uncapped = {int(k): v for k, v in sorted(uncapped_lag_data.items(), key=lambda item: int(item[0]))}
+        uncapped_lags = list(ordered_uncapped.keys())
+
+        capped_lag_data = capped_results[fh_int]
+        ordered_capped = {int(k): v for k, v in sorted(capped_lag_data.items(), key=lambda item: int(item[0]))}
+        capped_lags = list(ordered_capped.keys())
+
+        common_lags = sorted(list(set(uncapped_lags) & set(capped_lags)))
+        if not common_lags:
+            plt.close()
+            continue
+
+        model_classes = list(next(iter(ordered_uncapped.values())).keys())
+
+        for model_class in sorted(model_classes):
+            if "r2_mean" in metrics_to_include:
+                r2_values = [ordered_uncapped[lag][model_class]["r2_mean"] for lag in common_lags]
+                plt.plot(common_lags, r2_values, label=f"Uncapped {model_class} - R2", linestyle=":", marker='o')
+
+            if "mae_mean" in metrics_to_include:
+                mae_values = [ordered_uncapped[lag][model_class]["mae_mean"] for lag in common_lags]
+                plt.plot(common_lags, mae_values, label=f"Uncapped {model_class} - MAE", linestyle="--", marker='o')
+
+            if "mse_mean" in metrics_to_include:
+                mse_values = [ordered_uncapped[lag][model_class]["mse_mean"] for lag in common_lags]
+                plt.plot(common_lags, mse_values, label=f"Uncapped {model_class}", linestyle="-", marker='o')
+
+        for model_class in sorted(model_classes):
+            if "r2_mean" in metrics_to_include:
+                r2_values = [ordered_capped[lag][model_class]["r2_mean"] for lag in common_lags]
+                plt.plot(common_lags, r2_values, label=f"Capped {model_class} - R2", linestyle=":", marker='x')
+
+            if "mae_mean" in metrics_to_include:
+                mae_values = [ordered_capped[lag][model_class]["mae_mean"] for lag in common_lags]
+                plt.plot(common_lags, mae_values, label=f"Capped {model_class} - MAE", linestyle="--", marker='x')
+
+            if "mse_mean" in metrics_to_include:
+                mse_values = [ordered_capped[lag][model_class]["mse_mean"] for lag in common_lags]
+                plt.plot(common_lags, mse_values, label=f"Capped {model_class}", linestyle="-", marker='x')
+
+        plt.title(f"Forecast Horizon: {forecast_horizon} - Capped vs Uncapped Comparison")
+        plt.xlabel("Lag")
+        plt.ylabel("MSE")
         plt.legend(title="Data Type, Model Class and Metric")
         plt.grid(True)
         plt.tight_layout()
@@ -586,7 +756,7 @@ def plot_best_linear_results(
                 ]
                 config_labels = [
                     f"{model_class} (Batch: {ordered_lag_data[lag][model_class]['batch_size']}, "
-                    f"LR: {ordered_lag_data[lag][model_class]['lr']}) - MSE"
+                    f"LR: {ordered_lag_data[lag][model_class]['lr']})"
                     for lag in lags
                 ]
                 plt.plot(
@@ -596,7 +766,7 @@ def plot_best_linear_results(
 
         plt.title(f"Forecast Horizon: {forecast_horizon}")
         plt.xlabel("Lag")
-        plt.ylabel("Metrics")
+        plt.ylabel("MSE")
         plt.legend(title="Model Class and Metric")
         plt.grid(True)
         plt.tight_layout()
@@ -674,11 +844,11 @@ def plot_all_linear_results_separated(
 
                     if "mse_mean" in metrics_to_include:
                         mse_values = [ordered_lag_data[lag][model_class]["mse_mean"] for lag in lags]
-                        plt.plot(lags, mse_values, label=f"{model_class} - MSE", linestyle="-", marker = 'o')
+                        plt.plot(lags, mse_values, label=f"{model_class}", linestyle="-", marker = 'o')
 
                 plt.title(f"Batch Size: {batch_size}, LR: {lr}, Forecast Horizon: {forecast_horizon}")
                 plt.xlabel("Lag")
-                plt.ylabel("Metrics")
+                plt.ylabel("MSE")
                 plt.legend(title="Model Class and Metric")
                 plt.grid(True)
                 plt.tight_layout()
@@ -758,11 +928,11 @@ def plot_all_linear_results_joined(
 
                     if "mse_mean" in metrics_to_include:
                         mse_values = [ordered_lag_data[lag][model_class]["mse_mean"] for lag in lags]
-                        plt.plot(lags, mse_values, label=f"bs{batch_size}_lr{lr}_{model_class} - MSE", linestyle="-", marker = 'o')
+                        plt.plot(lags, mse_values, label=f"bs{batch_size}_lr{lr}_{model_class}", linestyle="-", marker = 'o')
 
         plt.title(f"Forecast Horizon: {forecast_horizon}")
         plt.xlabel("Lag")
-        plt.ylabel("Metrics")
+        plt.ylabel("MSE")
         plt.legend(title="Model Class and Metric")
         plt.grid(True)
         plt.tight_layout()
@@ -815,7 +985,7 @@ def plot_linear_comparison_results(uncapped_df, capped_df, base_dir_out, metrics
 
             if "mse_mean" in metrics_to_include:
                 mse_values = [ordered_uncapped[lag][model_class]["mse_mean"] for lag in common_lags]
-                plt.plot(common_lags, mse_values, label=f"Uncapped {model_class} - MSE", linestyle="-", marker='o')
+                plt.plot(common_lags, mse_values, label=f"Uncapped {model_class}", linestyle="-", marker='o')
 
         for model_class in sorted(model_classes):
             if "r2_mean" in metrics_to_include:
@@ -828,11 +998,11 @@ def plot_linear_comparison_results(uncapped_df, capped_df, base_dir_out, metrics
 
             if "mse_mean" in metrics_to_include:
                 mse_values = [ordered_capped[lag][model_class]["mse_mean"] for lag in common_lags]
-                plt.plot(common_lags, mse_values, label=f"Capped {model_class} - MSE", linestyle="-", marker='x')
+                plt.plot(common_lags, mse_values, label=f"Capped {model_class}", linestyle="-", marker='x')
 
         plt.title(f"Forecast Horizon: {forecast_horizon} - Capped vs Uncapped Comparison")
         plt.xlabel("Lag")
-        plt.ylabel("Metrics")
+        plt.ylabel("MSE")
         plt.legend(title="Data Type, Model Class and Metric")
         plt.grid(True)
         plt.tight_layout()
@@ -871,18 +1041,15 @@ def get_all_var_results(dataframe: pd.DataFrame):
 
 
 def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to_include=["mse_mean"], show_plot=False):
-    # Get results from both datasets
     uncapped_results = get_all_var_results(uncapped_df)
     capped_results = get_all_var_results(capped_df)
     
-    # Plot comparison for each forecast horizon
     for forecast_horizon in uncapped_results.keys():
         if forecast_horizon not in capped_results:
             continue
             
         plt.figure(figsize=(14, 8))
         
-        # Plot uncapped results
         uncapped_lag_data = uncapped_results[forecast_horizon]
         ordered_uncapped = dict(sorted(uncapped_lag_data.items(), key=lambda item: int(item[0])))
         lags = list(ordered_uncapped.keys())
@@ -900,7 +1067,7 @@ def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to
             
             if "mse_mean" in metrics_to_include:
                 mse_values = [ordered_uncapped[lag][model_class]["mse_mean"] for lag in lags]
-                plt.plot(lags, mse_values, label=f"Uncapped {model_class} - MSE", linestyle="-", marker='o')
+                plt.plot(lags, mse_values, label=f"Uncapped {model_class}", linestyle="-", marker='o')
         
         # Plot capped results
         capped_lag_data = capped_results[forecast_horizon]
@@ -917,11 +1084,11 @@ def plot_var_comparison_results(uncapped_df, capped_df, base_dir_out, metrics_to
             
             if "mse_mean" in metrics_to_include:
                 mse_values = [ordered_capped[lag][model_class]["mse_mean"] for lag in lags]
-                plt.plot(lags, mse_values, label=f"Capped {model_class} - MSE", linestyle="-", marker='x')
+                plt.plot(lags, mse_values, label=f"Capped {model_class}", linestyle="-", marker='x')
         
         plt.title(f"VAR Model - Forecast Horizon: {forecast_horizon} - Capped vs Uncapped Comparison")
         plt.xlabel("Lag")
-        plt.ylabel("Metrics")
+        plt.ylabel("MSE")
         plt.legend(title="Data Type, Model Class and Metric")
         plt.grid(True)
         plt.tight_layout()
@@ -973,13 +1140,13 @@ def plot_all_var_results(
                     ordered_lag_data[lag][model_class]["mse_mean"] for lag in lags
                 ]
                 plt.plot(
-                    lags, mse_values, label=f"{model_class} - MSE",
+                    lags, mse_values, label=f"{model_class}",
                     linestyle="-", marker='o'
                 )
 
         plt.title(f"Forecast Horizon: {forecast_horizon}")
         plt.xlabel("Lag")
-        plt.ylabel("Metrics")
+        plt.ylabel("MSE")
         plt.legend(title="Model Class and Metric")
         plt.grid(True)
         plt.tight_layout()
@@ -1007,10 +1174,11 @@ def plot_metrics(results, lags, classes, metrics_to_include, linestyle_map, pref
             )
 
 
-def plot_linear_var_patchtst_results(
+def plot_linear_var_patchtst_transf_results(
     dataframe_patchtst: pd.DataFrame,
     dataframe_linear: pd.DataFrame,
     dataframe_var: pd.DataFrame,
+    dataframe_transf: pd.DataFrame,
     base_dir_out: str,
     metrics_to_include: list = ["mse_mean"],
     show_plot: bool = False
@@ -1018,24 +1186,26 @@ def plot_linear_var_patchtst_results(
     results_patchtst = get_best_patchtst_results(dataframe_patchtst)
     results_linear = get_best_linear_results(dataframe_linear)
     results_var = get_all_var_results(dataframe_var)
+    results_transf = get_best_transformer_results(dataframe_transf)
 
     os.makedirs(base_dir_out, exist_ok=True)
 
     linestyle_map = {"r2_mean": ":", "mae_mean": "--", "mse_mean": "-"}
 
-    for lr, vr, pr in zip(sorted(results_linear), sorted(results_var), sorted(results_patchtst)):
-        plt.figure(figsize=(16, 10))
-        print(f"LR: {lr}")
-        print(f"VR: {vr}")
-        print(f"PR: {pr}")
-        
+    for lr, vr, pr, tr in zip(
+        sorted(results_linear), sorted(results_var),
+        sorted(results_patchtst), sorted(results_transf)
+    ):
+        plt.figure(figsize=(16, 10))        
         lr_res = results_linear[lr]
         vr_res = results_var[vr]
         ptst_res = results_patchtst[pr]
+        transf_res = results_transf[tr]
 
         ordered_lr_res = {k: v for k, v in sorted(lr_res.items(), key=lambda item: int(item[0]))}
         ordered_vr_res = {k: v for k, v in sorted(vr_res.items(), key=lambda item: int(item[0]))}
         ordered_ptst_res = {k: v for k, v in sorted(ptst_res.items(), key=lambda item: int(item[0]))}
+        ordered_transf_res = {k: v for k, v in sorted(transf_res.items(), key=lambda item: int(item[0]))}
 
         lr_lags = list(ordered_lr_res.keys())
         lr_classes = list(next(iter(ordered_lr_res.values())).keys())
@@ -1043,15 +1213,18 @@ def plot_linear_var_patchtst_results(
         vr_classes = list(next(iter(ordered_vr_res.values())).keys())
         ptst_lags = list(ordered_ptst_res.keys())
         ptst_classes = list(next(iter(ordered_ptst_res.values())).keys())
-
+        transf_lags = list(ordered_transf_res.keys())
+        transf_classes = list(next(iter(ordered_transf_res.values())).keys())
+        
         plot_metrics(ordered_lr_res, lr_lags, lr_classes, metrics_to_include, linestyle_map, "")
         plot_metrics(ordered_vr_res, vr_lags, vr_classes, metrics_to_include, linestyle_map, "")
         plot_metrics(ordered_ptst_res, ptst_lags, ptst_classes, metrics_to_include, linestyle_map, "")
+        plot_metrics(ordered_transf_res, transf_lags, transf_classes, metrics_to_include, linestyle_map, "")
 
         forecast_horizon = lr
         plt.title(f"Forecast Horizon: {forecast_horizon}")
         plt.xlabel("Lag")
-        plt.ylabel("Metrics")
+        plt.ylabel("MSE")
         plt.legend(
             title="Model Class and Metric",
             bbox_to_anchor=(1.05, 1),
@@ -1069,766 +1242,3 @@ def plot_linear_var_patchtst_results(
             plt.show()
 
         plt.clf()
-
-
-"""
-def plot_linear_var_patchtst_results(
-    dataframe_patchtst: pd.DataFrame,
-    dataframe_linear: pd.DataFrame,
-    dataframe_var: pd.DataFrame,
-    base_dir_out: str,
-    metrics_to_include: list = ["mse_mean"],
-    show_plot: bool = False
-):
-    results_patchtst = get_best_patchtst_results(dataframe_patchtst)
-    results_linear = get_best_linear_results(dataframe_linear)
-    results_var = get_all_var_results(dataframe_var)
-
-    os.makedirs(base_dir_out, exist_ok=True)
-
-    # Line style per metric
-    linestyle_map = {"r2_mean": ":", "mae_mean": "--", "mse_mean": "-"}
-
-    # Forecast horizons common to all models
-    forecast_horizons = sorted(
-        set(results_patchtst.keys()) |
-        set(results_linear.keys()) |
-        set(results_var.keys())
-    )
-
-    for fh in forecast_horizons:
-        plt.figure()
-
-        for model_name, results in {
-            "PatchTST": results_patchtst,
-            "Linear": results_linear,
-            "VAR": results_var
-        }.items():
-            if fh not in results:
-                continue
-
-            # Get lags and models
-            res_per_lag = results[fh]
-            sorted_lags = sorted(res_per_lag.keys(), key=int)
-
-            for metric in metrics_to_include:
-                metric_vals = []
-                for lag in sorted_lags:
-                    models = res_per_lag[lag]
-                    # Pick first (or only) model class
-                    model_class = next(iter(models))
-                    metric_val = models[model_class].get(metric, None)
-                    metric_vals.append(metric_val)
-
-                plt.plot(
-                    sorted_lags,
-                    metric_vals,
-                    label=f"{model_name} - {metric}",
-                    linestyle=linestyle_map.get(metric, "-")
-                )
-
-        plt.title(f"Forecast Horizon: {fh}")
-        plt.xlabel("Lag")
-        plt.ylabel("Metric Value")
-        plt.legend(title="Model & Metric")
-        plt.grid(True)
-        plt.tight_layout()
-
-        plot_path = os.path.join(base_dir_out, f"fh{fh}_comparison.png")
-        plt.savefig(plot_path)
-
-        if show_plot:
-            plt.show()
-
-        plt.clf()
-"""
-
-
-def plot_linear_var_results(
-    dataframe_linear: pd.DataFrame,
-    dataframe_var: pd.DataFrame,
-    base_dir_out: str,
-    metrics_to_include: list = ["mse_mean"],
-    show_plot: bool = False
-):
-    results_linear = get_best_linear_results(dataframe_linear)
-    results_var = get_all_var_results(dataframe_var)
-
-    print(f"Results linear: {results_linear}")
-    print(f"Results var: {results_var}")
-
-    os.makedirs(base_dir_out, exist_ok=True)
-
-    linestyle_map = {"r2_mean": ":", "mae_mean": "--", "mse_mean": "-"}
-
-    for lr, vr in zip(sorted(results_linear), sorted(results_var)):
-
-        print(f"LR: {lr}")
-        print(f"VR: {vr}")
-        
-        lr_res = results_linear[lr]
-        vr_res = results_var[vr]
-
-        ordered_lr_res = {k: v for k, v in sorted(lr_res.items(), key=lambda item: int(item[0]))}
-        ordered_vr_res = {k: v for k, v in sorted(vr_res.items(), key=lambda item: int(item[0]))}
-
-        lr_lags = list(ordered_lr_res.keys())
-        lr_classes = list(next(iter(ordered_lr_res.values())).keys())
-        vr_lags = list(ordered_vr_res.keys())
-        vr_classes = list(next(iter(ordered_vr_res.values())).keys())
-
-        plot_metrics(ordered_lr_res, lr_lags, lr_classes, metrics_to_include, linestyle_map, "")
-        plot_metrics(ordered_vr_res, vr_lags, vr_classes, metrics_to_include, linestyle_map, "")
-
-        forecast_horizon = lr
-        plt.title(f"Forecast Horizon: {forecast_horizon}")
-        plt.xlabel("Lag")
-        plt.ylabel("Metrics")
-        plt.legend(title="Model Class and Metric")
-        plt.grid(True)
-        plt.tight_layout()
-
-        plot_path = os.path.join(base_dir_out, f"fh{forecast_horizon}_results.png")
-        plt.savefig(plot_path)
-
-        if show_plot:
-            plt.show()
-
-        plt.clf()
-
-
-"""
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
-
-plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
-plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
-plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0/AllResults/"
-    "testing_results_seed0.csv"
-    #"results_averaged.csv"
-)
-df_var = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/plots/testing_results/var_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seed0"
-)
-#plot_all_var_results(df_var, base_dir_out)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
-)
-plot_linear_var_results(df_linear, df_var, base_dir_out)
-
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-
-# Uncapped data
-uncapped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0"
-#uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/results_averaged.csv"
-uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/testing_results_seed0.csv"
-df_uncapped = pd.read_csv(uncapped_path)
-
-# Capped data
-capped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
-capped_path = f"{base_dir}/evaluate_results/linear_models/{capped_suffix}/AllResults/results_averaged.csv"
-df_capped = pd.read_csv(capped_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0_cappedVSuncapped"
-)
-
-print(f"Uncapped data: {df_uncapped}")
-print(f"Capped data: {df_capped}")
-plot_linear_comparison_results(
-    df_uncapped,
-    df_capped,
-    base_dir_out,
-    metrics_to_include=["mse_mean"]
-)
-"""
-
-"""
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-
-# Uncapped VAR data
-uncapped_var_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-uncapped_var_path = f"{base_dir}/evaluate_results/var_model/{uncapped_var_suffix}/AllResults/results_averaged.csv"
-df_var_uncapped = pd.read_csv(uncapped_var_path)
-
-# Capped VAR data
-capped_var_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
-capped_var_path = f"{base_dir}/evaluate_results/var_model/{capped_var_suffix}/AllResults/results_averaged.csv"
-df_var_capped = pd.read_csv(capped_var_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_cappedVSuncapped"
-)
-
-plot_var_comparison_results(
-    df_var_uncapped,
-    df_var_capped,
-    base_dir_out
-)
-"""
-
-
-"""
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
-
-plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
-plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
-plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
-    "results_averaged.csv"
-)
-df_var = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/plots/testing_results/var_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data"
-)
-plot_all_var_results(df_var, base_dir_out)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
-)
-plot_linear_var_results(df_linear, df_var, base_dir_out)
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-
-# Uncapped data
-uncapped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/results_averaged.csv"
-df_uncapped = pd.read_csv(uncapped_path)
-
-# Capped data
-capped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
-capped_path = f"{base_dir}/evaluate_results/linear_models/{capped_suffix}/AllResults/results_averaged.csv"
-df_capped = pd.read_csv(capped_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_cappedVSuncapped"
-)
-
-plot_linear_comparison_results(
-    df_uncapped,
-    df_capped,
-    base_dir_out,
-    metrics_to_include=["mse_mean"]
-)
-
-
-
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
-
-plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
-plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
-plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0/AllResults/"
-    #"results_averaged.csv"
-    "testing_results_seed0.csv"
-)
-df_var = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/plots/testing_results/var_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seed0"
-)
-plot_all_var_results(df_var, base_dir_out)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
-)
-plot_linear_var_results(df_linear, df_var, base_dir_out)
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-
-# Uncapped data
-uncapped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0"
-uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/results_averaged.csv"
-df_uncapped = pd.read_csv(uncapped_path)
-
-# Capped data
-capped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
-capped_path = f"{base_dir}/evaluate_results/linear_models/{capped_suffix}/AllResults/results_averaged.csv"
-df_capped = pd.read_csv(capped_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0_cappedVSuncapped"
-)
-
-plot_linear_comparison_results(
-    df_uncapped,
-    df_capped,
-    base_dir_out,
-    metrics_to_include=["mse_mean"]
-)
-
-
-
-
-
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
-
-plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
-plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
-plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone/AllResults/"
-    #"results_averaged.csv"
-    "testing_results_seedNone.csv"
-)
-df_var = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/plots/testing_results/var_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_capped_data_seedNone"
-)
-plot_all_var_results(df_var, base_dir_out)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone"
-)
-plot_linear_var_results(df_linear, df_var, base_dir_out)
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-
-# Uncapped data
-uncapped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone"
-uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/results_averaged.csv"
-df_uncapped = pd.read_csv(uncapped_path)
-
-# Capped data
-capped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone"
-capped_path = f"{base_dir}/evaluate_results/linear_models/{capped_suffix}/AllResults/results_averaged.csv"
-df_capped = pd.read_csv(capped_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone_cappedVSuncapped"
-)
-
-plot_linear_comparison_results(
-    df_uncapped,
-    df_capped,
-    base_dir_out,
-    metrics_to_include=["mse_mean"]
-)
-"""
-
-
-"""
-results_path = (
-    "/home/marchostau/patchTSTResults3/patchTST_res1/"
-    "uncapped/seed_None/testing_results_seedNone.csv"
-)
-plot_base = (
-    "/home/marchostau/PatchTSTPlots/testing_results/patch_tst"
-)
-df_patchtst = pd.read_csv(results_path)
-plot_best_patchtst_results(df_patchtst, plot_base)
-
-plot_best_patchtst_results_by_patch_size(
-    dataframe=df_patchtst,
-    base_dir_out=plot_base,
-)
-
-plot_all_patchtst_results_joined(
-    dataframe=df_patchtst,
-    base_dir_out=plot_base
-)
-"""
-
-"""
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
-
-plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
-plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
-plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/AllResults/"
-    "results_averaged.csv"
-)
-df_var = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/plots/testing_results/var_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]"
-)
-plot_all_var_results(df_var, base_dir_out)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-)
-plot_linear_var_results(df_linear, df_var, base_dir_out)
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-
-# Uncapped data
-uncapped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/results_averaged.csv"
-df_uncapped = pd.read_csv(uncapped_path)
-
-# Capped data
-capped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
-capped_path = f"{base_dir}/evaluate_results/linear_models/{capped_suffix}/AllResults/results_averaged.csv"
-df_capped = pd.read_csv(capped_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_cappedVSuncapped"
-)
-
-plot_linear_comparison_results(
-    df_uncapped,
-    df_capped,
-    base_dir_out,
-    metrics_to_include=["mse_mean"]
-)
-
-
-
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
-
-plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
-plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
-plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0/AllResults/"
-    #"results_averaged.csv"
-    "testing_results_seed0.csv"
-)
-df_var = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/plots/testing_results/var_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_seed0"
-)
-plot_all_var_results(df_var, base_dir_out)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0"
-)
-plot_linear_var_results(df_linear, df_var, base_dir_out)
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-
-# Uncapped data
-uncapped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0"
-uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/results_averaged.csv"
-df_uncapped = pd.read_csv(uncapped_path)
-
-# Capped data
-capped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seed0"
-capped_path = f"{base_dir}/evaluate_results/linear_models/{capped_suffix}/AllResults/results_averaged.csv"
-df_capped = pd.read_csv(capped_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seed0_cappedVSuncapped"
-)
-
-plot_linear_comparison_results(
-    df_uncapped,
-    df_capped,
-    base_dir_out,
-    metrics_to_include=["mse_mean"]
-)
-
-
-
-
-
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-plot_base = f"{base_dir}/plots/testing_results/linear_models/{results_suffix}"
-
-plot_all_linear_results_joined(df_linear, f"{plot_base}/joined_results")
-plot_all_linear_results_separated(df_linear, f"{plot_base}/separated_results")
-plot_best_linear_results(df_linear, f"{plot_base}/best_results")
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone/AllResults/"
-    #"results_averaged.csv"
-    "testing_results_seedNone.csv"
-)
-df_var = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/plots/testing_results/var_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9)]_seedNone"
-)
-plot_all_var_results(df_var, base_dir_out)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone"
-)
-plot_linear_var_results(df_linear, df_var, base_dir_out)
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-
-# Uncapped data
-uncapped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone"
-uncapped_path = f"{base_dir}/evaluate_results/linear_models/{uncapped_suffix}/AllResults/results_averaged.csv"
-df_uncapped = pd.read_csv(uncapped_path)
-
-# Capped data
-capped_suffix = "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data_seedNone"
-capped_path = f"{base_dir}/evaluate_results/linear_models/{capped_suffix}/AllResults/results_averaged.csv"
-df_capped = pd.read_csv(capped_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_models/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_seedNone_cappedVSuncapped"
-)
-
-plot_linear_comparison_results(
-    df_uncapped,
-    df_capped,
-    base_dir_out,
-    metrics_to_include=["mse_mean"]
-)
-"""
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/AllResults/"
-    "results_averaged.csv"
-)
-df_var = pd.read_csv(results_path)
-
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/evaluate_results/patchtst_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9),(18,3)]/AllResults/"
-    "testing_results_seedNone.csv"
-)
-df_patchtst = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var_vs_patchtst/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]"
-)
-
-plot_linear_var_patchtst_results(
-    df_patchtst,
-    df_linear,
-    df_var,
-    base_dir_out
-)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/patchtst_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/best_results"
-)
-plot_best_patchtst_results(
-    df_patchtst,
-    base_dir_out
-)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/patchtst_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]/best_results_by_patch_size"
-)
-plot_best_patchtst_results_by_patch_size(
-    df_patchtst,
-    base_dir_out 
-)
-
-
-
-
-base_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/models"
-results_suffix = (
-    "results[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
-)
-results_path = f"{base_dir}/evaluate_results/linear_models/{results_suffix}/AllResults/results_averaged.csv"
-
-df_linear = pd.read_csv(results_path)
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "evaluate_results/var_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/AllResults/"
-    "results_averaged.csv"
-)
-df_var = pd.read_csv(results_path)
-
-
-results_path = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/"
-    "models/evaluate_results/patchtst_model/results"
-    "[((3,3),(6,6),(9,9),(12,12),(6,3),(9,3),(9,6),"
-    "(12,6),(12,9),(18,3)]_capped_data/AllResults/"
-    "testing_results_seedNone.csv"
-)
-df_patchtst = pd.read_csv(results_path)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/linear_vs_var_vs_patchtst/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data"
-)
-
-plot_linear_var_patchtst_results(
-    df_patchtst,
-    df_linear,
-    df_var,
-    base_dir_out
-)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/patchtst_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/best_results"
-)
-plot_best_patchtst_results(
-    df_patchtst,
-    base_dir_out
-)
-
-base_dir_out = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/models/"
-    "plots/testing_results/patchtst_model/results[((3,3),(6,6),(9,9),"
-    "(12,12),(6,3),(9,3),(9,6),(12,6),(12,9)]_capped_data/best_results_by_patch_size"
-)
-plot_best_patchtst_results_by_patch_size(
-    df_patchtst,
-    base_dir_out 
-)

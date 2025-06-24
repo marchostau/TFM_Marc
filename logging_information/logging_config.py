@@ -1,7 +1,7 @@
 import logging
 import os
 
-log_dir = "/home/marchostau/Desktop/TFM/Code/ProjectCode/logging_information/logs"
+log_dir = "logs"
 os.makedirs(log_dir, exist_ok=True)
 
 LOG_FILE = os.path.join(log_dir, "app.log")

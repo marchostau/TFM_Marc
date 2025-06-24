@@ -1,5 +1,4 @@
 import os
-import csv
 import random
 
 import pandas as pd
@@ -8,20 +7,18 @@ from torch.utils.data import Dataset
 from torch.utils.data import Subset
 from glob import glob
 
-from ..logging_information.logging_config import get_logger
-from ..models.utils import split_dataset
-
-logger = get_logger(__name__)
-
 
 class WindTimeSeriesDataset(Dataset):
     def __init__(
             self, dir_source: str, lag: int = 6,
-            forecast_horizon: int = 1, randomize: bool = True,
-            random_seed: int = 0, file_list: list = None
+            forecast_horizon: int = 1, randomize: bool = False,
+            random_seed: int = 0, file_list: list = None,
+            mean: torch.Tensor = None, std: torch.Tensor = None
     ):
         self.lag = lag
         self.forecast_horizon = forecast_horizon
+        self.mean = mean
+        self.std = std
 
         if file_list is not None:
             self.file_list = sorted(file_list)
@@ -29,22 +26,12 @@ class WindTimeSeriesDataset(Dataset):
             self.file_list = sorted(
                 glob(os.path.join(dir_source, "*.csv"))
             )
-            if randomize:
-                random.seed(random_seed)
-                random.shuffle(self.file_list)
-
-        logger.info(f"Randomize: {randomize} | Random seed: {random_seed}")
-        #logger.info(f"File list: {self.file_list}")
+            if random_seed is not None and str(random_seed).lower() != "none":
+                random_seed = int(random_seed)
 
         self.data_indices = self._build_index()
-        #logger.info(f"Data indices: {self.data_indices}")
 
     def _build_index(self):
-        #logger.info("Building index of the Wind Time Series Dataset")
-        #logger.info(
-        #    f"Configuration: Lag = {self.lag} | "
-        #    f"Forecast Horizon = {self.forecast_horizon}"
-        #)
         dataset_info = {}
         lost_timestamps = 0
         index = []
@@ -58,11 +45,6 @@ class WindTimeSeriesDataset(Dataset):
             feature_data = df[["u_component", "v_component"]].values
 
             if len(feature_data) < (self.lag + self.forecast_horizon):
-                #logger.warning(
-                #    f"Length df {len(df)} < {self.lag + self.forecast_horizon}"
-                #    f" | File_idx: {file_idx} | File path: {file_path}"
-                #)
-                #logger.warning(f"File {file_path} has 0 sequences")
                 lost_timestamps += len(df)
                 limit = self.lag + self.forecast_horizon
                 dataset_info[file_path] = f"0 ({len(df)} < {limit})"
@@ -81,24 +63,10 @@ class WindTimeSeriesDataset(Dataset):
                     num_sequences += 1
 
             dataset_info[file_path] = num_sequences
-            #logger.info(f"File {file_path} has {num_sequences} of sequences")
 
         dataset_info["LOST TIMESTAMPS"] = lost_timestamps
-        dataset_info["TOTAL"] = len(index)
+        dataset_info["TOTAL SEQUENCES"] = len(index)
 
-        file_out_path = (
-            f'/home/marchostau/Desktop/'
-            f'summ_{self.lag}_{self.forecast_horizon}.csv'
-        )
-        with open(file_out_path, "w", newline="") as f:
-            w = csv.writer(f)
-            w.writerows(dataset_info.items())
-
-        #logger.info(
-        #    f"Index of the Wind Time Series Dataset built for "
-        #    f"lag {self.lag} and forecast {self.forecast_horizon} -> "
-        #    f"Length index: {len(index)}"
-        #)
         return index
 
     def __len__(self):
@@ -161,6 +129,10 @@ class WindTimeSeriesDataset(Dataset):
 
         input_metadata_df['file_name'] = file_name
         input_metadata = input_metadata_df.values
+
+        if self.mean is not None and self.std is not None:
+            X = (X - self.mean.to_numpy()) / self.std.to_numpy()
+            y = (y - self.mean.to_numpy()) / self.std.to_numpy()
 
         return {
             "X": torch.tensor(X, dtype=torch.float32),
@@ -255,91 +227,49 @@ def analyze_segment_balance(dir_source, lag_forecast_list, train_ratio=0.8, rand
     return pd.DataFrame(results)
 
 
-"""
-dir_source = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
-    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
-)
-test_dates = [
-    "2024-07-29", "2024-07-16", "2024-07-13", "2024-07-07",
-    "2024-06-29", "2024-06-28", "2024-06-23", "2024-06-15",
-    "2024-06-13", "2024-06-03", "2024-06-03", "2024-05-30",
-    "2024-06-29", "2024-06-28", "2023-10-27"
-]
+def split_dataset(dataset, train_ratio: int = 0.8):
+    train_size = int(len(dataset) * train_ratio)
+    indices = list(range(len(dataset)))
 
-lag = 6
-forecast = 3
+    train_dataset = Subset(dataset, indices[:train_size])
+    test_dataset = Subset(dataset, indices[train_size:])
 
-train_files, test_files, counts = balanced_split(
-    dir_source, test_dates, lag, forecast
-)
+    return train_dataset, test_dataset
 
-train_dataset = WindTimeSeriesDataset(
-    dir_source=dir_source, lag=lag,
-    forecast_horizon=forecast, file_list=train_files
-)
-test_dataset = WindTimeSeriesDataset(
-    dir_source=dir_source, lag=lag,
-    forecast_horizon=forecast, file_list=test_files
-)
 
-train_sequences = sum(counts[f] for f in train_files)
-test_sequences = sum(counts[f] for f in test_files)
-total_sequences = train_sequences + test_sequences
+def obtain_train_data(
+        dir_source: str,
+        lag: int,
+        forecast_horizon: int,
+        random_seed: int,
+        train_ratio: float = 0.8,
+        train_num_seq: int = None
+):
+    full_dataset = WindTimeSeriesDataset(
+        dir_source, lag=lag,
+        forecast_horizon=forecast_horizon,
+        randomize=False, random_seed=random_seed
+    )
+    train_dataset, _ = split_dataset(full_dataset, train_ratio)
 
-print(f"Lag: {lag} | Forecast horizon: {forecast}")
-print(f"Train Sequences: {len(train_dataset)} ({train_sequences/total_sequences:.2%})")
-print(f"Test Sequences: {len(test_dataset)} ({test_sequences/total_sequences:.2%})")
+    file_list = []
+    for idx in train_dataset.indices[:train_num_seq] if train_num_seq else train_dataset.indices:
+        file_idx, seq_start = full_dataset.data_indices[idx]
+        actual_file = full_dataset.file_list[file_idx]
+        file_list.append((actual_file, seq_start))
 
-"""
-"""
-dir_source = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
-    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
-)
-all_files = sorted(glob(os.path.join(dir_source, "*.csv")))
-test_dates = [
-    "2024-07-29", "2024-07-16", "2024-07-13", "2024-07-07",
-    "2024-06-29", "2024-06-28", "2024-06-23", "2024-06-15",
-    "2024-06-13", "2024-06-03", "2024-06-03", "2024-05-30",
-    "2024-06-29", "2024-06-28", "2023-10-27"
-]
-test_files = [f for f in all_files if any(date in os.path.basename(f) for date in test_dates)]
-train_files = list(set(all_files) - set(test_files))
+    last_file, seq_start = file_list[-1]
+    file_list = list(dict.fromkeys(act_file for act_file, _ in file_list))
+    final_seq = seq_start + 1
 
-print(f"Train files: {train_files}")
-print(f"Test files: {test_files}")
+    file_list = sorted(file_list)
 
-lag = 6
-forecast = 3
+    train_data = pd.DataFrame()
+    for file_path in file_list:
+        act_df = pd.read_csv(file_path, parse_dates=["timestamp"])
+        if file_path == last_file:
+            act_df = act_df.iloc[:final_seq]
+        train_data = pd.concat([train_data, act_df])
 
-train_dataset = WindTimeSeriesDataset(
-    dir_source=dir_source, lag=lag,
-    forecast_horizon=forecast, file_list=train_files
-)
-test_dataset = WindTimeSeriesDataset(
-    dir_source=dir_source, lag=lag,
-    forecast_horizon=forecast, file_list=test_files
-)
+    return train_data
 
-print(f"Train dataset: {train_dataset}")
-print(f"Train dataset len: {len(train_dataset)}")
-print(f"Test dataset: {test_dataset}")
-print(f"Test dataset len: {len(test_dataset)}")
-"""
-"""
-dir_source = (
-    "/home/marchostau/Desktop/TFM/Code/ProjectCode/datasets/"
-    "complete_datasets_csv_processed_5m_zstd(gen)_dbscan(daily)"
-)
-lag_forecast_list = [
-    (3, 3), (6, 3), (9, 3),
-    (6, 6), (9, 6), (12, 6),
-    (9, 9), (12, 9),
-    (12, 12)
-]
-
-df = analyze_segment_balance(dir_source, lag_forecast_list)
-print(df)
-df.to_csv('segment_analysis.csv')
-"""

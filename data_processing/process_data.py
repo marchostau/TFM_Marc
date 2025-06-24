@@ -1,6 +1,7 @@
 import os
 
 import pandas as pd
+import numpy as np
 
 from .data_cleaning import (
     remove_wrong_timestamps,
@@ -52,6 +53,13 @@ def process_datasets(config_path: str):
         norm_mode_parameters["std"] = global_std
         logger.info(f"Global mean: {global_mean} | std: {global_std}")
 
+    dbscan_stats = {
+        'files_processed': 0,
+        'total_rows_before': 0,
+        'total_rows_removed': 0,
+        'per_file_removals': []
+    }
+
     files = sorted(os.listdir(p_config.dir_source))
     for filename in files:
         file_path = os.path.join(p_config.dir_source, filename)
@@ -82,6 +90,8 @@ def process_datasets(config_path: str):
                 segments = [dataframe]
 
             for i, segment in enumerate(segments):
+                original_len = len(segment)
+
                 segment_suffix = (
                     f"_segment_{i+1}" if p_config.split_continuous_segments
                     else ""
@@ -91,6 +101,7 @@ def process_datasets(config_path: str):
                     f"{filename.replace('.csv', '')}_processed"
                     f"{segment_suffix}.csv"
                 )
+                
                 if p_config.normalize:
                     segment = normalize_dataset(
                         segment,
@@ -98,9 +109,9 @@ def process_datasets(config_path: str):
                         p_config.norm_cols,
                         mode_parameters=norm_mode_parameters
                     )
-
+                
                 if p_config.remove_outliers:
-                    segment = remove_outliers_dataset(
+                    segment, removed_rows = remove_outliers_dataset(
                         segment,
                         p_config.outlier_mode,
                         p_config.outlier_cols,
@@ -109,6 +120,20 @@ def process_datasets(config_path: str):
                     if segment is None:
                         continue
 
+                    removal_percentage = (removed_rows / original_len) * 100
+                    dbscan_stats['files_processed'] += 1
+                    dbscan_stats['total_rows_before'] += original_len
+                    dbscan_stats['total_rows_removed'] += removed_rows
+
+                    file_stats = {
+                        'filename': filename,
+                        'segment': i+1 if p_config.split_continuous_segments else 0,
+                        'rows_before': original_len,
+                        'rows_removed': removed_rows,
+                        'percentage_removed': removal_percentage
+                    }
+                    dbscan_stats['per_file_removals'].append(file_stats)
+                    
                 if p_config.sliding_window:
                     segment = average_sliding_window(
                         segment, pd.Timedelta(p_config.window_size)
@@ -120,3 +145,30 @@ def process_datasets(config_path: str):
 
                 segment.to_csv(output_filepath, index=False)
                 logger.info(f"Processed file saved: {output_filepath}")
+
+    if dbscan_stats['files_processed'] > 0:
+        # Create summary statistics
+        summary_stats = {
+            'total_files_processed': dbscan_stats['files_processed'],
+            'total_rows_before': dbscan_stats['total_rows_before'],
+            'total_rows_removed': dbscan_stats['total_rows_removed'],
+            'total_percentage_removed': (
+                dbscan_stats['total_rows_removed'] / 
+                dbscan_stats['total_rows_before'] * 100
+            ),
+            'median_rows_removed': np.median(
+                [f['rows_removed'] for f in dbscan_stats['per_file_removals']]
+            )
+        }
+        
+        # Log the summary statistics
+        logger.info("\nDBSCAN Outlier Removal Summary Statistics:")
+        logger.info(f"Total files processed: {summary_stats['total_files_processed']}")
+        logger.info(f"Total rows before cleaning: {summary_stats['total_rows_before']}")
+        logger.info(f"Total rows removed: {summary_stats['total_rows_removed']}")
+        logger.info(
+            f"Total percentage of points removed: {summary_stats['total_percentage_removed']:.2f}%"
+        )
+        logger.info(
+            f"Median rows removed per file/segment: {summary_stats['median_rows_removed']}"
+        )
