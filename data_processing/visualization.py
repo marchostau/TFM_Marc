@@ -7,10 +7,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from statsmodels.tsa.stattools import adfuller
 import matplotlib.dates as mdates
-from ..models.utils import concatenate_datasets 
 from matplotlib.ticker import MaxNLocator
-import seaborn as sns
 
+from ..models.utils import concatenate_datasets 
 from ..logging_information.logging_config import get_logger
 
 logger = get_logger(__name__)

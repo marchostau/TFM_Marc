@@ -1,5 +1,6 @@
 import os
 from itertools import product
+import math
 import time
 
 import torch
@@ -10,7 +11,6 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from transformers import PatchTSTForPrediction, PatchTSTConfig
 
 from ..data_processing.dataset_loader import WindTimeSeriesDataset
 from ..logging_information.logging_config import get_logger
@@ -21,83 +21,120 @@ from ..models.utils import (
 logger = get_logger(__name__)
 
 
-class PatchTSTWrapper(nn.Module):
+class TransformerEncoderWrapper(nn.Module):
     def __init__(self, config):
         super().__init__()
         
-        self.model_config = PatchTSTConfig(
-            num_input_channels=config.get("num_input_channels", 2),
-            context_length=config["context_length"],
-            patch_len=config["patch_len"],
-            stride=config.get("patch_stride", 1),
-            num_hidden_layers=config.get("num_hidden_layers", 3),
-            d_model=config.get("d_model", 16),
-            num_attention_heads=config.get("num_attention_heads", 4),
-            share_embedding=config.get("share_embedding", True),
-            channel_attention=config.get("channel_attention", False),
-            ffn_dim=config.get("ffn_dim", 128),
-            norm_type=config.get("norm_type", "batchnorm"),
-            norm_eps=config.get("norm_eps", 1e-5),
-            activation_function=config.get("activation_function", "gelu"),
-            pre_norm=config.get("pre_norm", True),
-            prediction_length=config["prediction_length"],
-            target_dim=config.get("num_targets", 2),
-            attention_dropout=config.get("attention_dropout", 0.0),
-            positional_dropout=config.get("positional_dropout", 0.0),
-            path_dropout=config.get("path_dropout", 0.0),
-            head_dropout=config.get("head_dropout", 0.0),
+        self.context_length = config["context_length"]
+        self.prediction_length = config["prediction_length"]
+        self.num_targets = config.get("num_targets", 2)
+        
+        # Input embedding layer
+        self.input_embedding = nn.Linear(config["num_input_channels"], config["d_model"])
+        
+        # Positional encoding
+        self.positional_encoding = PositionalEncoding(
+            d_model=config["d_model"],
+            dropout=config.get("positional_dropout", 0.0),
+            max_len=config["context_length"]
+        )
+        
+        # Transformer encoder
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=config["d_model"],
+            nhead=config["num_attention_heads"],
+            dim_feedforward=config["ffn_dim"],
+            dropout=config.get("attention_dropout", 0.0),
+            activation=config.get("activation_function", "relu"),
+            batch_first=True
+        )
+        
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=config.get("num_hidden_layers", 3)
+        )
+        
+        # Output projection
+        self.output_projection = nn.Linear(
+            config["d_model"] * config["context_length"],
+            config["prediction_length"] * config["num_targets"]
         )
 
-        self.model = PatchTSTForPrediction(self.model_config)
+    def forward(self, x):
+        # x: [batch_size, context_length, num_input_channels]
+        batch_size = x.size(0)
+        
+        # Embed input
+        x = self.input_embedding(x)  # [batch_size, context_length, d_model]
+        
+        # Add positional encoding
+        x = self.positional_encoding(x)
+        
+        # Pass through transformer encoder
+        x = self.transformer_encoder(x)  # [batch_size, context_length, d_model]
+        
+        # Flatten and project to output
+        x = x.reshape(batch_size, -1)  # [batch_size, context_length * d_model]
+        x = self.output_projection(x)  # [batch_size, prediction_length * num_targets]
+        
+        # Reshape to [batch_size, prediction_length, num_targets]
+        return x.view(batch_size, self.prediction_length, self.num_targets)
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
 
     def forward(self, x):
-        output = self.model(past_values=x).prediction_outputs
-        return output
+        """
+        Args:
+            x: Tensor, shape [batch_size, seq_len, embedding_dim]
+        """
+        x = x + self.pe[:x.size(1)].transpose(0, 1)
+        return self.dropout(x)
 
 
-def train_patchtst_model(
+def train_transformer_model(
     config: dict,
     output_dir: str,
     train_ratio: float = 0.8,
     save_checkpoints: bool = True,
 ):
-    logger.info("Starting PatchTST training...")
+    logger.info("Starting Transformer Encoder training...")
     logger.info(f"Training configuration: {config}")
     training_start_time = time.time()
 
-    patchtst_config = {
+    transformer_config = {
         "num_input_channels": config.get("num_input_channels", 2),
-        "context_length": config["lag_patch_forecast"][0],
-        "patch_len": config["lag_patch_forecast"][1],
-        "stride": config.get("patch_stride", 1),
+        "context_length": config["lag_forecast"][0],
+        "prediction_length": config["lag_forecast"][1],
         "num_hidden_layers": config.get("num_hidden_layers", 3),
         "d_model": config.get("d_model", 16),
         "num_attention_heads": config.get("num_attention_heads", 4),
-        "share_embedding": config.get("share_embedding", True),
-        "channel_attention": config.get("channel_attention", False),
         "ffn_dim": config.get("ffn_dim", 128),
-        "norm_type": config.get("norm_type", "batchnorm"),
-        "norm_eps": config.get("norm_eps", 1e-5),
         "activation_function": config.get("activation_function", "gelu"),
-        "pre_norm": config.get("pre_norm", True),
-        "prediction_length": config["lag_patch_forecast"][2],
-        "target_dim": config.get("num_targets", 2),
+        "num_targets": config.get("num_targets", 2),
         "attention_dropout": config.get("attention_dropout", 0.0),
         "positional_dropout": config.get("positional_dropout", 0.0),
-        "path_dropout": config.get("path_dropout", 0.0),
-        "head_dropout": config.get("head_dropout", 0.0),
     }
-    model = PatchTSTWrapper(patchtst_config)
+    model = TransformerEncoderWrapper(transformer_config)
 
     early_stopping_patience = config.get("early_stopping_patience", 5)
     early_stopping_min_delta = config.get("early_stopping_min_delta", 0.0001)
     randomize = config.get("randomize", False)
     random_seed = config.get("random_seed", None)
-    lag, _, forecast_horizon = config["lag_patch_forecast"]
+    lag, forecast_horizon = config["lag_forecast"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    logger.info(f"Using device: {device}")
 
     optimizer = getattr(optim, config["optimizer"].capitalize())(
         model.parameters(), lr=config["lr"]
@@ -159,7 +196,7 @@ def train_patchtst_model(
         batch_size=config["batch_size"],
         shuffle=config["shuffle"],
         collate_fn=custom_collate_fn,
-        num_workers=8,      
+        num_workers=8,
         pin_memory=True,
         persistent_workers=True
     )
@@ -187,9 +224,6 @@ def train_patchtst_model(
             epoch_loss += loss.item()
 
         avg_loss = epoch_loss / len(train_loader)
-        logger.info(
-            f"Epoch {epoch + 1}/{config['epochs']} - Loss: {avg_loss:.6f}"
-        )
 
         history['loss'].append(avg_loss)
         history['epoch'].append(epoch)
@@ -237,7 +271,7 @@ def train_patchtst_model(
     return model, history, epoch, total_training_time
 
 
-def evaluate_patchtst_model(
+def evaluate_transformer_model(
     config: dict,
     model: nn.Module,
     output_dir: str,
@@ -245,14 +279,13 @@ def evaluate_patchtst_model(
     randomize: bool,
     train_ratio: float = 0.8,
 ):
-    logger.info("Initializing PatchTST model for evaluation...")
+    logger.info("Initializing Transformer Encoder model for evaluation...")
     logger.info(f"Evaluation configuration: {config}")
 
-    lag, _, forecast_horizon = config["lag_patch_forecast"]
+    lag, forecast_horizon = config["lag_forecast"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    logger.info(f"Using device: {device}")
 
     full_dataset = WindTimeSeriesDataset(
         config["dir_source"], lag=lag,
@@ -369,7 +402,7 @@ def evaluate_patchtst_model(
     r2 = r2_score(all_labels_conc, all_preds_conc)
 
     logger.info(
-        f"Evaluation with PatchTST model Completed:\n"
+        f"Evaluation with Transformer Encoder model Completed:\n"
         f"R²: {r2:.4f}, MSE: {mse:.4f}, MAE: {mae:.4f}"
     )
 
@@ -381,9 +414,9 @@ def save_loss_plots(
     config: dict,
     plot_save_path: str
 ) -> None:
-    model_name = "PatchTST"
+    model_name = "TransformerEncoder"
     batch_size = config["batch_size"]
-    lag, _, forecast = config["lag_patch_forecast"]
+    lag, forecast = config["lag_forecast"]
     learning_rate = config["lr"]
 
     plt.figure(figsize=(8, 5))
@@ -419,7 +452,7 @@ def run_experiments(
 
     for seed in random_seed_list:
         seed_results = []
-
+        
         seed_dir = os.path.join(output_base_dir, f"seed{seed}")
         os.makedirs(seed_dir, exist_ok=True)
 
@@ -439,30 +472,22 @@ def run_experiments(
 
             config["random_seed"] = seed
 
-            model_name = "PatchTST"
-            lag, patch_size, fh = config["lag_patch_forecast"]
+            model_name = "TransformerEncoder"
+            lag, fh = config["lag_forecast"]
             bs = config["batch_size"]
             lr = config["lr"]
             epochs = config["epochs"]
 
-            # PatchTST-specific parameters from config
+            # Transformer-specific parameters from config
             num_input_channels = config["num_input_channels"]
-            patch_stride = config["patch_stride"]
             num_hidden_layers = config["num_hidden_layers"]
             d_model = config["d_model"]
             num_attention_heads = config["num_attention_heads"]
-            share_embedding = config["share_embedding"]
-            channel_attention = config["channel_attention"]
             ffn_dim = config["ffn_dim"]
-            norm_type = config["norm_type"]
-            norm_eps = config["norm_eps"]
             activation_function = config["activation_function"]
-            pre_norm = config["pre_norm"]
-            num_targets = config["num_targets"]
             attention_dropout = config["attention_dropout"]
             positional_dropout = config["positional_dropout"]
-            path_dropout = config["path_dropout"]
-            head_dropout = config["head_dropout"]
+            num_targets = config["num_targets"]
 
             exp_dir = os.path.join(
                 seed_dir, model_name
@@ -472,23 +497,18 @@ def run_experiments(
                 f"lag{lag}_fh{fh}"
             )
             exp_dir = os.path.join(
-                exp_dir, f"patch_size{patch_size}"
-            )
-            exp_dir = os.path.join(
                 exp_dir, f"batch_size{bs}_lr{lr}"
             )
             exp_dir = os.path.join(
                 exp_dir,
-                f"epochs{epochs}_chs{num_input_channels}_stride{patch_stride}"
-                f"_layers{num_hidden_layers}_dm{d_model}_heads{num_attention_heads}"
-                f"_shareEmb{int(share_embedding)}_chanAtt{int(channel_attention)}_ffn{ffn_dim}"
-                f"_norm{norm_type}_eps{norm_eps}_act{activation_function}_preNorm{int(pre_norm)}"
+                f"epochs{epochs}_chs{num_input_channels}_layers{num_hidden_layers}"
+                f"_dm{d_model}_heads{num_attention_heads}"
+                f"_ffn{ffn_dim}_act{activation_function}"
                 f"_tgt{num_targets}_attnDO{attention_dropout}_posDO{positional_dropout}"
-                f"_pathDO{path_dropout}_headDO{head_dropout}"
             )
             os.makedirs(exp_dir, exist_ok=True)
 
-            model, history, epochs, training_time = train_patchtst_model(
+            model, history, epochs, training_time = train_transformer_model(
                 config=config,
                 output_dir=exp_dir,
                 train_ratio=train_ratio
@@ -496,7 +516,7 @@ def run_experiments(
 
             save_loss_plots(history, config, exp_dir)
 
-            metrics = evaluate_patchtst_model(
+            metrics = evaluate_transformer_model(
                 config=config,
                 model=model,
                 output_dir=exp_dir,
@@ -511,7 +531,6 @@ def run_experiments(
                 "model_class": model_name,
                 "lag": lag,
                 "forecast_horizon": fh,
-                "patch_size": patch_size,
                 "batch_size": bs,
                 "lr": lr,
                 "dir_source": config["dir_source"],
@@ -526,22 +545,14 @@ def run_experiments(
                 "mae": metrics["mae"],
 
                 "num_input_channels": config["num_input_channels"],
-                "patch_stride": config["patch_stride"],
                 "num_hidden_layers": config["num_hidden_layers"],
                 "d_model": config["d_model"],
                 "num_attention_heads": config["num_attention_heads"],
-                "share_embedding": config["share_embedding"],
-                "channel_attention": config["channel_attention"],
                 "ffn_dim": config["ffn_dim"],
-                "norm_type": config["norm_type"],
-                "norm_eps": config["norm_eps"],
                 "activation_function": config["activation_function"],
-                "pre_norm": config["pre_norm"],
                 "num_targets": config["num_targets"],
                 "attention_dropout": config["attention_dropout"],
                 "positional_dropout": config["positional_dropout"],
-                "path_dropout": config["path_dropout"],
-                "head_dropout": config["head_dropout"]
             }
             all_results.append(results)
             seed_results.append(results)

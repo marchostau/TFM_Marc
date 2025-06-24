@@ -2,7 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from typing import List, Dict, Any
+from typing import List
 
 from .utils import obtain_config_dict
 
