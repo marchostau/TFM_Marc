@@ -1,4 +1,4 @@
-# Wind Forecasting for Sailing Races using Statistical and Transformer-based Models
+# Wind Forecasting for Sailing Races using Statistical and Deep Learning Models
 
 ## Project Overview
 
