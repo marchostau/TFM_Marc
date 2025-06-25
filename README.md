@@ -5,7 +5,7 @@
 This project aims to forecast short- to medium-term wind behavior to support tactical decision-making in sailboat races. It combines classical statistical models with modern deep learning architectures (Linear, NLinear, Transformer Encoder, PatchTST), enabling a comparative evaluation of forecasting techniques using high-resolution wind data.
 
 ---
-
+```bash
 ## Project Structure
 ProjectCode/
 ├── config.yaml # Main configuration file
@@ -34,7 +34,7 @@ ProjectCode/
 │ ├── utils.py # Training and evaluation helpers
 │ ├── visualization.py # Forecast visualizations
 │ └── init.py
-
+```
 
 ---
 
@@ -44,9 +44,10 @@ ProjectCode/
 
 ```bash
 pip install -r requirements.txt
+```
 
 ### 2. Configure the Pipeline
-First of all, load all the raw days data with load_dir_text methods inside the file_loader.py file, in order to extract the interesting variables from the raw days data. Then edit the config.yaml, configuring where the days in csv format are situated and the output directory. In this configuration file you have to define which preprocessing techniques and which techniques you want to use. Finally, you can run the run_experiments methods of each one of the models with the segments in csv format obtained after the preprocessing. In the run_experiments methods you can specify which hyperparameters you want to use for each model and which configurations of lag and forecast horizon you desire to use.
+First of all, load all the raw days data with load_dir_text method inside the file_loader.py file, in order to extract the interesting variables from the raw days data (In Texys Marine frame format). Then edit the config.yaml, configuring where the days in csv format are situated and the output directory. In this configuration file you have to define which preprocessing methods and which techniques you want to use. Finally, you can run the run_experiments methods of each one of the models with the segments in csv format obtained after the preprocessing. In the run_experiments methods you can specify which hyperparameters you want to use for each model and which configurations of lag and forecast horizon you desire to use.
 
 ## Models Implemented
 ### VAR (Vector AutoRegressive)
